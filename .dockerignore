@@ -1,0 +1,15 @@
+node_modules/
+.git/
+.github/
+docs/
+*.md
+.env
+.env.*
+.DS_Store
+dist/
+*.log
+coverage/
+apps/web/.svelte-kit/
+apps/web/build/
+server/bin/
+server/cmd/server/server

@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+apps/web/build/
+apps/web/.svelte-kit/
+server/bin/
+server/cmd/server/server
+dist/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+/.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Allow shared IDE extensions recommendations in subdirectories
+# (overrides global gitignore patterns)
+!apps/web/.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+*.log
+
+# Testing
+coverage/
+
+# Go
+server/vendor/
+
+# SQLite
+*.db
+*.sqlite
+*.sqlite3
+/data/

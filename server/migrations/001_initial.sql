@@ -1,0 +1,23 @@
+-- Initial migration placeholder.
+-- This file is a placeholder for the future SQLite schema.
+-- No tables are created yet as encryption/sync is not implemented.
+
+-- Future schema sketch (see docs/ARCHITECTURE.md):
+--
+-- CREATE TABLE IF NOT EXISTS accounts (
+--     id TEXT PRIMARY KEY,
+--     email TEXT UNIQUE NOT NULL,
+--     password_hash TEXT NOT NULL,
+--     created_at TEXT NOT NULL DEFAULT (datetime('now')),
+--     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+-- );
+--
+-- CREATE TABLE IF NOT EXISTS blob_records (
+--     id TEXT PRIMARY KEY,
+--     account_id TEXT NOT NULL,
+--     campaign_key_id TEXT NOT NULL,
+--     encrypted_payload BLOB NOT NULL,
+--     vector_clock TEXT,
+--     created_at TEXT NOT NULL DEFAULT (datetime('now')),
+--     FOREIGN KEY (account_id) REFERENCES accounts(id)
+-- );

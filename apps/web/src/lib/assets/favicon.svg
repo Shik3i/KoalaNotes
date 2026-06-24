@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Simple koala face icon -->
+  <circle cx="32" cy="32" r="30" fill="#4a4a6a" stroke="#e94560" stroke-width="2"/>
+  <!-- Ears -->
+  <circle cx="12" cy="14" r="10" fill="#4a4a6a" stroke="#e94560" stroke-width="2"/>
+  <circle cx="52" cy="14" r="10" fill="#4a4a6a" stroke="#e94560" stroke-width="2"/>
+  <!-- Eyes -->
+  <circle cx="23" cy="30" r="4" fill="#eaeaea"/>
+  <circle cx="41" cy="30" r="4" fill="#eaeaea"/>
+  <circle cx="24" cy="30" r="2" fill="#1a1a2e"/>
+  <circle cx="42" cy="30" r="2" fill="#1a1a2e"/>
+  <!-- Nose -->
+  <ellipse cx="32" cy="40" rx="6" ry="5" fill="#2a2a4a" stroke="#e94560" stroke-width="1"/>
+  <!-- Mouth -->
+  <path d="M26 46 Q32 42 38 46" stroke="#eaeaea" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+</svg>
