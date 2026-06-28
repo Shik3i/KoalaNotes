@@ -7,6 +7,7 @@
 	import { goto } from '$app/navigation';
 	import TagInput from '$lib/components/common/TagInput.svelte';
 	import { exportNoteAsMarkdown } from '$lib/utils/export';
+	import { triggerAutoSync } from '$lib/services/sync';
 	import type { Note, NoteSection, Role, Visibility, WikiLink } from '$lib/types/models';
 
 	let campaignId = $derived($page.params.campaignId ?? '');
@@ -91,6 +92,7 @@
 	async function handleSave() {
 		if (!note || !hasChanges) return;
 		await updateNote(note.id, { title: title.trim() || 'Untitled', content, tags, sections });
+		triggerAutoSync();
 	}
 
 	function handleCycleVisibility(heading: string) {

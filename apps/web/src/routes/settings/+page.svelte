@@ -3,7 +3,7 @@
 	import { db } from '$lib/db/database';
 	import { deriveKey, generateSalt, deriveSaltFromPassword, generateCampaignKey, exportKeyAsBase64, uint8ArrayToBase64, base64ToUint8Array } from '$lib/crypto/keys';
 	import { encrypt as cryptoEncrypt, decrypt as cryptoDecrypt, wrapKey, unwrapKey } from '$lib/crypto/encrypt';
-	import { fullSync, pull, push } from '$lib/services/sync';
+	import { fullSync, pull, push, registerAutoSync, unregisterAutoSync } from '$lib/services/sync';
 	import type { SyncStatus } from '$lib/types/models';
 
 	let email = $state('');
@@ -43,6 +43,7 @@
 	function handleLogout() {
 		masterKey = null;
 		keyReady = false;
+		unregisterAutoSync();
 		logout();
 	}
 
@@ -56,6 +57,26 @@
 			const key = await deriveKey(password, salt);
 			masterKey = key;
 			password = ''; // clear from memory
+
+			// Register auto-sync using the master key and per-campaign keys
+			registerAutoSync(async () => {
+				const mk = masterKey;
+				if (!mk) return;
+				await fullSync(
+					async (plaintext) => {
+						const data = JSON.parse(plaintext);
+						const cid = data.campaign?.id;
+						if (!cid) throw new Error('missing campaign_id');
+						const rec = await db.crypto_keys.where('campaign_id').equals(cid).first();
+						if (!rec) throw new Error('no key for campaign');
+						const ck = await unwrapKey({ iv: rec.iv, ciphertext: rec.wrapped_campaign_key }, mk);
+						return cryptoEncrypt(plaintext, ck);
+					},
+					async (payload) => {
+						throw new Error('pull during auto-sync not supported');
+					}
+				);
+			});
 
 			const saltB64 = uint8ArrayToBase64(salt);
 
@@ -119,6 +140,26 @@
 			const key = await deriveKey(password, salt);
 			masterKey = key;
 			password = ''; // clear from memory
+
+			registerAutoSync(async () => {
+				const mk = masterKey;
+				if (!mk) return;
+				await fullSync(
+					async (plaintext) => {
+						const data = JSON.parse(plaintext);
+						const cid = data.campaign?.id;
+						if (!cid) throw new Error('missing campaign_id');
+						const rec = await db.crypto_keys.where('campaign_id').equals(cid).first();
+						if (!rec) throw new Error('no key for campaign');
+						const ck = await unwrapKey({ iv: rec.iv, ciphertext: rec.wrapped_campaign_key }, mk);
+						return cryptoEncrypt(plaintext, ck);
+					},
+					async (payload) => {
+						throw new Error('pull during auto-sync not supported');
+					}
+				);
+			});
+
 			keyReady = true;
 		} catch (err) {
 			keySetupError = err instanceof Error ? err.message : 'Unlock failed';
