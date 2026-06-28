@@ -1,5 +1,7 @@
 /** Core data model types for KoalaNotes. See docs/DATA_MODEL.md for details. */
 
+export type SyncStatus = 'idle' | 'syncing' | 'error' | 'success';
+
 export type Visibility = 'gm_only' | 'shared' | 'observer' | 'private';
 
 export type TemplateType =
@@ -23,7 +25,7 @@ export interface Campaign {
 	system?: string;
 	created_at: string;
 	updated_at: string;
-	archived: boolean;
+	archived: number; // 0 = active, 1 = archived
 }
 
 export interface Note {
@@ -98,7 +100,7 @@ export interface Tag {
 }
 
 export interface WikiLink {
-	id: string;
+	id?: string;
 	source_note_id: string;
 	target_note_id: string;
 	context: string;
@@ -112,4 +114,13 @@ export interface CampaignMember {
 	display_name: string;
 	role: Role;
 	joined_at: string;
+}
+
+export interface CryptoKeyRecord {
+	id: string;
+	salt: string;                // base64, used for PBKDF2 key derivation
+	wrapped_campaign_key: string; // base64, AES-GCM wrapped campaign key
+	iv: string;                  // base64, IV used for wrapping
+	campaign_id: string;
+	created_at: string;
 }

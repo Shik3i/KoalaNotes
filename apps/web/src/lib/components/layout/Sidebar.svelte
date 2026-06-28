@@ -134,6 +134,13 @@
 			</ul>
 		{/if}
 	</nav>
+
+	<div class="sidebar-footer">
+		<a href="/settings" class="settings-link">
+			<span class="settings-icon" aria-hidden="true">⚙</span>
+			<span>Settings</span>
+		</a>
+	</div>
 </aside>
 
 <style>
@@ -344,6 +351,32 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+
+	.sidebar-footer {
+		padding: 0.5rem;
+		border-top: 1px solid var(--color-border);
+	}
+
+	.settings-link {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.5rem 0.75rem;
+		border-radius: 6px;
+		color: var(--color-text-muted);
+		font-size: 0.8125rem;
+		text-decoration: none;
+		transition: background 0.15s, color 0.15s;
+	}
+
+	.settings-link:hover {
+		background: var(--color-surface-alt);
+		color: var(--color-text);
+	}
+
+	.settings-icon {
+		font-size: 1rem;
 	}
 
 	@media (max-width: 768px) {

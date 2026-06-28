@@ -4,12 +4,13 @@
 	import { observeActiveSession } from '$lib/db/sessions';
 	import { observeSessionEntries } from '$lib/db/timeline';
 	import { viewingRole } from '$lib/stores/role';
+	import { auth } from '$lib/stores/auth';
 	import { page } from '$app/stores';
 	import Sidebar from './Sidebar.svelte';
 	import TimelinePanel from './TimelinePanel.svelte';
 	import SessionTimer from './SessionTimer.svelte';
 	import LiveCommentBar from './LiveCommentBar.svelte';
-	import type { Role, Session, TimelineEntry } from '$lib/types/models';
+	import type { Role, Session, TimelineEntry, SyncStatus } from '$lib/types/models';
 
 	interface Props {
 		children?: import('svelte').Snippet;
@@ -23,13 +24,16 @@
 
 	// Active session state from Dexie
 	let activeSession = $state<Session | null>(null);
+	let prevSessionId = $state<string | null>(null);
 	$effect(() => {
 		const observable = observeActiveSession();
 		const sub = observable.subscribe({
 			next: (result) => {
-				activeSession = result ?? null;
-				// Auto-open timeline when session starts
-				if (result) timelineOpen = true;
+				const session = result ?? null;
+				// Auto-open timeline only on null→session transition (session start)
+				if (session && !prevSessionId) timelineOpen = true;
+				prevSessionId = session?.id ?? null;
+				activeSession = session;
 			},
 			error: (err) => console.error('[active session]', err)
 		});
@@ -80,6 +84,12 @@
 
 	// Current note from URL for comment context
 	let currentNoteId = $derived($page.params.noteId ?? undefined);
+
+	// Sync status: derived from auth token
+	let syncStatus = $state<SyncStatus>('idle');
+	$effect(() => {
+		syncStatus = $auth.token ? 'success' : 'idle';
+	});
 </script>
 
 <div class="app-shell">
@@ -110,6 +120,12 @@
 				elapsed={elapsedSeconds}
 				sessionName={activeSession?.name ?? ''}
 			/>
+			<a href="/settings" class="settings-link" title="Settings" aria-label="Settings">
+				⚙
+			</a>
+			{#if $auth.token && syncStatus === 'success'}
+				<span class="sync-indicator sync-success" title="Connected (sync available)">✓</span>
+			{/if}
 			<button
 				class="toggle-btn"
 				onclick={() => timelineOpen = !timelineOpen}
@@ -205,6 +221,25 @@
 	.role-select:hover {
 		border-color: var(--color-primary);
 	}
+
+	.settings-link {
+		text-decoration: none;
+		color: var(--color-text-muted);
+		font-size: 1.1rem;
+		line-height: 1;
+		transition: color 0.15s;
+	}
+
+	.settings-link:hover {
+		color: var(--color-text);
+	}
+
+	.sync-indicator {
+		font-size: 0.875rem;
+		line-height: 1;
+	}
+
+	.sync-success { color: #38a169; }
 
 	.app-body {
 		flex: 1;

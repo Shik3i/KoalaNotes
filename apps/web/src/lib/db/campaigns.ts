@@ -31,7 +31,7 @@ export async function createCampaign(
 		system,
 		created_at: now,
 		updated_at: now,
-		archived: false
+		archived: 0
 	};
 	await db.campaigns.add(campaign);
 	return campaign.id;
@@ -53,22 +53,24 @@ export async function renameCampaign(id: string, newName: string): Promise<void>
 
 /** Archive a campaign (hide from default list). */
 export async function archiveCampaign(id: string): Promise<void> {
-	await updateCampaign(id, { archived: true });
+	await updateCampaign(id, { archived: 1 });
 }
 
 /** Permanently delete a campaign and all its related data. */
 export async function deleteCampaign(id: string): Promise<void> {
 	const tables = [db.campaigns, db.notes, db.sessions, db.timeline_entries, db.tags, db.wiki_links, db.campaign_members] as const;
 	await db.transaction('rw', tables, async () => {
+		// Read note IDs BEFORE deleting notes
+		const noteIds = await db.notes.where('campaign_id').equals(id).primaryKeys();
+		await db.wiki_links
+			.filter(l => noteIds.includes(l.source_note_id) || noteIds.includes(l.target_note_id))
+			.delete();
 		await db.campaigns.delete(id);
 		await db.notes.where('campaign_id').equals(id).delete();
 		await db.sessions.where('campaign_id').equals(id).delete();
 		await db.timeline_entries.where('campaign_id').equals(id).delete();
 		await db.tags.where('campaign_id').equals(id).delete();
-		const noteIds = await db.notes.where('campaign_id').equals(id).primaryKeys();
-		await db.wiki_links
-			.filter(l => noteIds.includes(l.source_note_id) || noteIds.includes(l.target_note_id))
-			.delete();
 		await db.campaign_members.where('campaign_id').equals(id).delete();
+		await db.crypto_keys.where('campaign_id').equals(id).delete();
 	});
 }

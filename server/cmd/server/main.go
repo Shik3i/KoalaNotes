@@ -7,9 +7,11 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
+	"github.com/shik3i/koalanotes/internal/db"
 	"github.com/shik3i/koalanotes/internal/handler"
 	"github.com/shik3i/koalanotes/internal/middleware"
 )
@@ -26,15 +28,32 @@ func main() {
 	}))
 	slog.SetDefault(logger)
 
-	addr := os.Getenv("KOALA_LISTEN_ADDR")
-	if addr == "" {
-		addr = defaultAddr
+	addr := envOrDefault("KOALA_LISTEN_ADDR", defaultAddr)
+	dataDir := envOrDefault("KOALA_DATA_DIR", "/data")
+	jwtSecretStr := os.Getenv("KOALA_JWT_SECRET")
+	if jwtSecretStr == "" {
+		slog.Error("KOALA_JWT_SECRET environment variable is required")
+		os.Exit(1)
+	}
+	if jwtSecretStr == "change-me-in-production" {
+		slog.Error("KOALA_JWT_SECRET must not be the default value 'change-me-in-production'")
+		os.Exit(1)
+	}
+	jwtSecret := []byte(jwtSecretStr)
+
+	// Ensure data directory exists
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		slog.Error("failed to create data directory", "error", err)
+		os.Exit(1)
 	}
 
-	dataDir := os.Getenv("KOALA_DATA_DIR")
-	if dataDir == "" {
-		dataDir = "/data"
+	// Open database
+	database, err := db.Open(filepath.Join(dataDir, "koalanotes.db"))
+	if err != nil {
+		slog.Error("failed to open database", "error", err)
+		os.Exit(1)
 	}
+	defer database.Close()
 
 	slog.Info("starting server",
 		"name", serverName,
@@ -49,11 +68,14 @@ func main() {
 	mux.HandleFunc("GET /healthz", handler.Healthz)
 	mux.HandleFunc("GET /api/version", handler.Version(version))
 
-	// Future API routes placeholder
-	// mux.HandleFunc("POST /api/auth/register", ...)
-	// mux.HandleFunc("POST /api/auth/login", ...)
-	// mux.HandleFunc("GET /api/sync/pull", ...)
-	// mux.HandleFunc("POST /api/sync/push", ...)
+	// Auth endpoints (no JWT required)
+	mux.HandleFunc("POST /api/auth/register", handler.NewRegisterHandler(database, jwtSecret))
+	mux.HandleFunc("POST /api/auth/login", handler.NewLoginHandler(database, jwtSecret))
+
+	// Sync endpoints (JWT required)
+	authMw := middleware.Auth(jwtSecret)
+	mux.Handle("POST /api/sync/push", authMw(http.HandlerFunc(handler.NewSyncPushHandler(database))))
+	mux.Handle("GET /api/sync/pull", authMw(http.HandlerFunc(handler.NewSyncPullHandler(database))))
 
 	// Wrap with middleware
 	wrapped := middleware.Logging(mux)
@@ -89,4 +111,11 @@ func main() {
 	}
 
 	slog.Info("server stopped")
+}
+
+func envOrDefault(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
 }

@@ -126,7 +126,8 @@ export async function retargetWikiLinks(
 
 	await db.transaction('rw', db.wiki_links, async () => {
 		for (const link of linksToUpdate) {
-			await db.wiki_links.update(link.id, {
+			const key: [string, string] = [link.source_note_id, link.target_note_id];
+			await db.wiki_links.update(key, {
 				context: link.context === oldTitle ? newTitle : link.context,
 				created_at: now
 			});
