@@ -34,7 +34,7 @@ export async function deriveKey(password: string, salt: Uint8Array): Promise<Cry
 		keyMaterial,
 		{ name: 'AES-GCM', length: KEY_LENGTH },
 		false,
-		['encrypt', 'decrypt']
+		['encrypt', 'decrypt', 'wrapKey', 'unwrapKey']
 	);
 }
 

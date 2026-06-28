@@ -51,55 +51,66 @@
 
 	async function setupKey() {
 		keySetupError = '';
-		const salt = generateSalt();
-		const key = await deriveKey(password, salt);
-		masterKey = key;
+		try {
+			const salt = generateSalt();
+			const key = await deriveKey(password, salt);
+			masterKey = key;
+			password = ''; // clear from memory
 
-		const saltB64 = uint8ArrayToBase64(salt);
+			const saltB64 = uint8ArrayToBase64(salt);
 
-		// Always upsert the salt record (fixed ID ensures single row)
-		await db.crypto_keys.put({
-			id: SALT_RECORD_ID,
-			salt: saltB64,
-			wrapped_campaign_key: '',
-			iv: '',
-			campaign_id: SALT_CAMPAIGN_ID,
-			created_at: new Date().toISOString()
-		});
-
-		// Generate a campaign key for each existing campaign (skip if exists)
-		const campaigns = await db.campaigns.toArray();
-		for (const campaign of campaigns) {
-			const existing = await db.crypto_keys.where('campaign_id').equals(campaign.id).first();
-			if (existing) continue;
-
-			const campaignKey = await generateCampaignKey();
-			const wrapped = await wrapKey(campaignKey, masterKey);
-
+			// Always upsert the salt record (fixed ID ensures single row)
 			await db.crypto_keys.put({
-				id: crypto.randomUUID(),
-				salt: '',
-				wrapped_campaign_key: wrapped.ciphertext,
-				iv: wrapped.iv,
-				campaign_id: campaign.id,
+				id: SALT_RECORD_ID,
+				salt: saltB64,
+				wrapped_campaign_key: '',
+				iv: '',
+				campaign_id: SALT_CAMPAIGN_ID,
 				created_at: new Date().toISOString()
 			});
-		}
 
-		keyReady = true;
+			// Generate a campaign key for each existing campaign (skip if exists)
+			const campaigns = await db.campaigns.toArray();
+			for (const campaign of campaigns) {
+				const existing = await db.crypto_keys.where('campaign_id').equals(campaign.id).first();
+				if (existing) continue;
+
+				const campaignKey = await generateCampaignKey();
+				const wrapped = await wrapKey(campaignKey, masterKey);
+
+				await db.crypto_keys.put({
+					id: crypto.randomUUID(),
+					salt: '',
+					wrapped_campaign_key: wrapped.ciphertext,
+					iv: wrapped.iv,
+					campaign_id: campaign.id,
+					created_at: new Date().toISOString()
+				});
+			}
+
+			keyReady = true;
+		} catch (err) {
+			keySetupError = err instanceof Error ? err.message : 'Key setup failed';
+			masterKey = null;
+		}
 	}
 
 	async function unlockKey() {
 		keySetupError = '';
-		const saltRecord = await db.crypto_keys.where('campaign_id').equals(SALT_CAMPAIGN_ID).first();
-		if (!saltRecord || !saltRecord.salt) {
-			keySetupError = 'No key salt found. Use "Set Up Key" first.';
-			return;
+		try {
+			const saltRecord = await db.crypto_keys.where('campaign_id').equals(SALT_CAMPAIGN_ID).first();
+			if (!saltRecord || !saltRecord.salt) {
+				keySetupError = 'No key salt found. Use "Set Up Key" first.';
+				return;
+			}
+			const salt = base64ToUint8Array(saltRecord.salt);
+			const key = await deriveKey(password, salt);
+			masterKey = key;
+			password = ''; // clear from memory
+			keyReady = true;
+		} catch (err) {
+			keySetupError = err instanceof Error ? err.message : 'Unlock failed';
 		}
-		const salt = base64ToUint8Array(saltRecord.salt);
-		const key = await deriveKey(password, salt);
-		masterKey = key;
-		keyReady = true;
 	}
 
 	async function handleFullSync() {

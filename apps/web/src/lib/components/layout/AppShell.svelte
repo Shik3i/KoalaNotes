@@ -48,6 +48,10 @@
 		if (activeSession?.started_at) {
 			// Initialize elapsed from session start
 			const started = new Date(activeSession.started_at).getTime();
+			if (Number.isNaN(started)) {
+				elapsedSeconds = 0;
+				return;
+			}
 			elapsedSeconds = Math.floor((Date.now() - started) / 1000);
 
 			// Tick every second

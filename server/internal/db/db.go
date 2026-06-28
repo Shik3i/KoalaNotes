@@ -13,7 +13,7 @@ type BlobRecord struct {
 	ID              string `json:"id"`
 	AccountID       string `json:"account_id"`
 	CampaignKeyID   string `json:"campaign_key_id"`
-	EncryptedPayload []byte `json:"encrypted_payload"`
+	EncryptedPayload string `json:"encrypted_payload"`
 	VectorClock     string `json:"vector_clock,omitempty"`
 	CreatedAt       string `json:"created_at"`
 }
@@ -57,7 +57,7 @@ func migrate(conn *sql.DB) error {
 			id TEXT PRIMARY KEY,
 			account_id TEXT NOT NULL,
 			campaign_key_id TEXT NOT NULL,
-			encrypted_payload BLOB NOT NULL,
+			encrypted_payload TEXT NOT NULL,
 			vector_clock TEXT,
 			created_at TEXT NOT NULL DEFAULT (datetime('now')),
 			FOREIGN KEY (account_id) REFERENCES accounts(id)
