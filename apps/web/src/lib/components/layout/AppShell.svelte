@@ -90,10 +90,7 @@
 	let currentNoteId = $derived($page.params.noteId ?? undefined);
 
 	// Sync status: derived from auth token
-	let syncStatus = $state<SyncStatus>('idle');
-	$effect(() => {
-		syncStatus = $auth.token ? 'success' : 'idle';
-	});
+	let syncStatus = $derived($auth.token ? 'success' : 'idle');
 </script>
 
 <div class="app-shell">

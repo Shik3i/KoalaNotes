@@ -123,10 +123,13 @@ export async function push(
 	const blobs: BlobRecord[] = [];
 
 	for (const campaign of campaigns) {
-		const notes = await db.notes.where('campaign_id').equals(campaign.id).toArray();
-		const sessions = await db.sessions.where('campaign_id').equals(campaign.id).toArray();
-		const timeline_entries = await db.timeline_entries.where('campaign_id').equals(campaign.id).toArray();
-		const members = await db.campaign_members.where('campaign_id').equals(campaign.id).toArray();
+		// Parallelize the 4 read queries per campaign
+		const [notes, sessions, timeline_entries, members] = await Promise.all([
+			db.notes.where('campaign_id').equals(campaign.id).toArray(),
+			db.sessions.where('campaign_id').equals(campaign.id).toArray(),
+			db.timeline_entries.where('campaign_id').equals(campaign.id).toArray(),
+			db.campaign_members.where('campaign_id').equals(campaign.id).toArray(),
+		]);
 
 		const campaignData = {
 			campaign,

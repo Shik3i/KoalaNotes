@@ -26,10 +26,7 @@
 	});
 
 	// Track which campaign is active based on URL
-	let activeCampaignId = $state<string | null>(null);
-	$effect(() => {
-		activeCampaignId = $page.params.campaignId || null;
-	});
+	let activeCampaignId = $derived($page.params.campaignId ?? null);
 
 	// Notes for the active campaign (expanded in sidebar)
 	let activeNotes = $state<Note[]>([]);

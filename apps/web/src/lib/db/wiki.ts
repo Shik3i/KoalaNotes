@@ -34,14 +34,16 @@ export async function resolveWikiLinks(
 		return;
 	}
 
-	// Resolve each target title to a note ID using compound index for O(log n) lookup
+	// Batch-resolve all target titles in one query using compound index
 	const linkData: Array<{ title: string; noteId: string | null }> = [];
+	const titleKeys = [...targets].map(t => [campaignId, t.toLowerCase()] as [string, string]);
+	const matchingNotes = await db.notes
+		.where('[campaign_id+title_lower]')
+		.anyOf(titleKeys)
+		.toArray();
+	const noteByLower = new Map(matchingNotes.map(n => [n.title_lower, n.id]));
 	for (const targetTitle of targets) {
-		const targetNote = await db.notes
-			.where('[campaign_id+title_lower]')
-			.equals([campaignId, targetTitle.toLowerCase()])
-			.first();
-		linkData.push({ title: targetTitle, noteId: targetNote?.id ?? null });
+		linkData.push({ title: targetTitle, noteId: noteByLower.get(targetTitle.toLowerCase()) ?? null });
 	}
 
 	// Rewrite all wiki_links for this source note

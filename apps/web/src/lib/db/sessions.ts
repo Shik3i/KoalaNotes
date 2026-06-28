@@ -1,6 +1,7 @@
 import { db, uuid } from './database';
 import { liveQuery } from 'dexie';
 import type { Note, Session, TimelineEntry } from '$lib/types/models';
+import { formatElapsed } from '$lib/utils/export';
 
 /** Observe the single active session (status = 'active'), if any. */
 export function observeActiveSession() {
@@ -71,14 +72,6 @@ export async function deleteSession(id: string): Promise<void> {
 		await db.sessions.delete(id);
 		await db.timeline_entries.where('session_id').equals(id).delete();
 	});
-}
-
-/** Format elapsed seconds as HH:MM:SS for recap text. */
-function formatElapsed(seconds: number): string {
-	const h = Math.floor(seconds / 3600);
-	const m = Math.floor((seconds % 3600) / 60);
-	const s = seconds % 60;
-	return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 }
 
 /**

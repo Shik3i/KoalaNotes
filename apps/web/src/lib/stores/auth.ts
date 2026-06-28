@@ -32,11 +32,19 @@ function clearStored() {
 /** Auth state: token, accountId, email. Persisted to localStorage. */
 export const auth = writable<AuthState>(getStored());
 
+let persistPending: AuthState | null = null;
+let persistScheduled = false;
 auth.subscribe((v) => {
-	if (v.token) {
-		persist(v);
-	} else {
-		clearStored();
+	persistPending = v;
+	if (!persistScheduled) {
+		persistScheduled = true;
+		queueMicrotask(() => {
+			persistScheduled = false;
+			const p = persistPending;
+			persistPending = null;
+			if (p?.token) persist(p);
+			else clearStored();
+		});
 	}
 });
 

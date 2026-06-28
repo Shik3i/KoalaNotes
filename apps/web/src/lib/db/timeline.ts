@@ -12,13 +12,14 @@ export function observeSessionEntries(sessionId: string) {
 	);
 }
 
-/** Observe all timeline entries for a campaign, newest first. */
+/** Observe recent timeline entries for a campaign, newest first. */
 export function observeCampaignEntries(campaignId: string) {
 	return liveQuery(() =>
 		db.timeline_entries
 			.where('[campaign_id+clock_time]')
 			.between([campaignId, ''], [campaignId, '\uffff'])
 			.reverse()
+			.limit(200)
 			.toArray()
 	);
 }

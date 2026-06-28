@@ -2,6 +2,8 @@
  * AES-GCM encrypt/decrypt utilities for campaign payloads.
  */
 
+import { uint8ArrayToBase64, base64ToUint8Array } from './keys';
+
 export interface EncryptedPayload {
 	iv: string;       // base64
 	ciphertext: string; // base64
@@ -19,8 +21,8 @@ export async function encrypt(plaintext: string, key: CryptoKey): Promise<Encryp
 	);
 
 	return {
-		iv: bufferToBase64(iv),
-		ciphertext: bufferToBase64(new Uint8Array(ciphertext))
+		iv: uint8ArrayToBase64(iv),
+		ciphertext: uint8ArrayToBase64(new Uint8Array(ciphertext))
 	};
 }
 
@@ -29,8 +31,8 @@ export async function decrypt(
 	payload: EncryptedPayload,
 	key: CryptoKey
 ): Promise<string> {
-	const iv = base64ToBuffer(payload.iv);
-	const ciphertext = base64ToBuffer(payload.ciphertext);
+	const iv = base64ToUint8Array(payload.iv);
+	const ciphertext = base64ToUint8Array(payload.ciphertext);
 
 	const plaintext = await crypto.subtle.decrypt(
 		{ name: 'AES-GCM', iv },
@@ -54,8 +56,8 @@ export async function wrapKey(
 	});
 
 	return {
-		iv: bufferToBase64(iv),
-		ciphertext: bufferToBase64(new Uint8Array(wrapped))
+		iv: uint8ArrayToBase64(iv),
+		ciphertext: uint8ArrayToBase64(new Uint8Array(wrapped))
 	};
 }
 
@@ -64,8 +66,8 @@ export async function unwrapKey(
 	wrapped: EncryptedPayload,
 	masterKey: CryptoKey
 ): Promise<CryptoKey> {
-	const iv = base64ToBuffer(wrapped.iv);
-	const wrappedBytes = base64ToBuffer(wrapped.ciphertext);
+	const iv = base64ToUint8Array(wrapped.iv);
+	const wrappedBytes = base64ToUint8Array(wrapped.ciphertext);
 
 	return crypto.subtle.unwrapKey(
 		'raw',
@@ -78,20 +80,4 @@ export async function unwrapKey(
 	);
 }
 
-function bufferToBase64(bytes: Uint8Array): string {
-	let binary = '';
-	for (let i = 0; i < bytes.length; i++) {
-		binary += String.fromCharCode(bytes[i]);
-	}
-	return btoa(binary);
-}
 
-function base64ToBuffer(encoded: string): Uint8Array<ArrayBuffer> {
-	const binary = atob(encoded);
-	const buffer = new ArrayBuffer(binary.length);
-	const bytes = new Uint8Array(buffer);
-	for (let i = 0; i < binary.length; i++) {
-		bytes[i] = binary.charCodeAt(i);
-	}
-	return bytes;
-}

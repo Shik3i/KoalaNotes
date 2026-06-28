@@ -149,19 +149,29 @@
 	let backlinkTitles = $state<Map<string, string>>(new Map());
 	$effect(() => {
 		if (!noteId) return;
+		let destroyed = false;
 		const observable = observeBacklinks(noteId);
 		const sub = observable.subscribe({
 			next: async (result) => {
+				if (destroyed) return;
 				backlinks = result;
 				const ids = result.map(l => l.source_note_id).filter(Boolean);
-				backlinkTitles = await getNoteTitleMap(ids);
+				const titles = await getNoteTitleMap(ids);
+				if (destroyed) return;
+				backlinkTitles = titles;
 			},
 			error: (err) => console.error('[backlinks]', err)
 		});
-		return () => sub.unsubscribe();
+		return () => {
+			destroyed = true;
+			sub.unsubscribe();
+		};
 	});
 
 	let saveTimer: ReturnType<typeof setTimeout> | undefined;
+	$effect(() => {
+		return () => { if (saveTimer) clearTimeout(saveTimer); };
+	});
 	function onInput() {
 		if (saveTimer) clearTimeout(saveTimer);
 		saveTimer = setTimeout(() => { handleSave(); }, 1500);
@@ -227,6 +237,8 @@
 
 		return `<p>${html}</p>`;
 	}
+
+	let previewHtml = $derived(renderPreview(content, campaignId, currentRole));
 </script>
 
 <main class="note-editor">
@@ -299,7 +311,7 @@
 				<div class="preview-pane">
 					<div class="preview-header">Preview</div>
 					<div class="preview-content">
-						{@html renderPreview(content, campaignId, currentRole)}
+						{@html previewHtml}
 					</div>
 				</div>
 			{/if}

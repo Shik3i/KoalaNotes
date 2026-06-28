@@ -75,3 +75,12 @@ export function exportNotesAsMarkdown(notes: Note[], campaignName: string): void
 	const filename = `${safeName}_notes.md`;
 	download(filename, formatNotesAsMarkdown(notes, campaignName));
 }
+
+/** Format elapsed seconds as HH:MM:SS. */
+export function formatElapsed(seconds: number): string {
+	if (!Number.isFinite(seconds) || seconds < 0) return '00:00:00';
+	const h = Math.floor(seconds / 3600);
+	const m = Math.floor((seconds % 3600) / 60);
+	const s = seconds % 60;
+	return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
