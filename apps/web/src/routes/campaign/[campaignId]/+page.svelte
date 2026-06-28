@@ -188,7 +188,8 @@
 	$effect(() => {
 		let cancelled = false;
 		seedTemplates().then(() => {
-			if (!cancelled) getAllTemplates().then((t) => { templates = t; });
+			if (cancelled) return;
+			getAllTemplates().then((t) => { if (!cancelled) templates = t; });
 		});
 		return () => { cancelled = true; };
 	});

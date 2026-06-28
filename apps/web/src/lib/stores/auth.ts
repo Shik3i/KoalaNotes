@@ -18,19 +18,32 @@ function getStored(): AuthState {
 }
 
 function persist(state: AuthState) {
-	if (typeof localStorage !== 'undefined') {
+	if (typeof localStorage === 'undefined') return;
+	try {
 		localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+	} catch (e) {
+		console.warn('[auth] failed to persist auth state', e);
 	}
 }
 
 function clearStored() {
-	if (typeof localStorage !== 'undefined') {
+	if (typeof localStorage === 'undefined') return;
+	try {
 		localStorage.removeItem(STORAGE_KEY);
-	}
+	} catch { /* ignore */ }
 }
 
 /** Auth state: token, accountId, email. Persisted to localStorage. */
 export const auth = writable<AuthState>(getStored());
+
+// Sync auth state across tabs
+if (typeof window !== 'undefined') {
+	window.addEventListener('storage', (e) => {
+		if (e.key === STORAGE_KEY) {
+			auth.set(getStored());
+		}
+	});
+}
 
 let persistPending: AuthState | null = null;
 let persistScheduled = false;
@@ -55,6 +68,31 @@ interface AuthResponse {
 	account_id: string;
 	email: string;
 }
+
+/** Parse seconds-remaining from JWT token or -1 if unparseable. */
+function tokenExpiresIn(token: string): number {
+	try {
+		const payload = JSON.parse(atob(token.split('.')[1]));
+		if (payload.exp) {
+			return Math.max(0, payload.exp * 1000 - Date.now());
+		}
+	} catch { /* ignore */ }
+	return -1;
+}
+
+let expiryTimer: ReturnType<typeof setTimeout> | undefined;
+auth.subscribe((v) => {
+	if (expiryTimer) { clearTimeout(expiryTimer); expiryTimer = undefined; }
+	if (v.token) {
+		const ms = tokenExpiresIn(v.token);
+		if (ms >= 0 && ms <= 86400000) {
+			expiryTimer = setTimeout(() => {
+				console.warn('[auth] token expired, logging out');
+				auth.set({ token: null, accountId: null, email: null });
+			}, ms);
+		}
+	}
+});
 
 /** Register a new account and update the auth store. */
 export async function register(email: string, password: string): Promise<void> {

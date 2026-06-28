@@ -16,12 +16,16 @@
 
 	// Resolve note titles whenever entries change
 	$effect(() => {
+		let destroyed = false;
 		const ids = [...new Set(entries.map(e => e.note_id).filter(Boolean) as string[])];
 		if (ids.length === 0) {
 			noteTitles = new Map();
 			return;
 		}
-		getNoteTitleMap(ids).then(m => { noteTitles = m; });
+		getNoteTitleMap(ids)
+			.then(m => { if (!destroyed) noteTitles = m; })
+			.catch(err => console.error('[note titles]', err));
+		return () => { destroyed = true; };
 	});
 
 	function formatClock(iso: string): string {

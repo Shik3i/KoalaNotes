@@ -58,7 +58,7 @@ export async function archiveCampaign(id: string): Promise<void> {
 
 /** Permanently delete a campaign and all its related data. */
 export async function deleteCampaign(id: string): Promise<void> {
-	const tables = [db.campaigns, db.notes, db.sessions, db.timeline_entries, db.tags, db.wiki_links, db.campaign_members] as const;
+	const tables = [db.campaigns, db.notes, db.sessions, db.timeline_entries, db.tags, db.wiki_links, db.campaign_members, db.crypto_keys] as const;
 	await db.transaction('rw', tables, async () => {
 		// Read note IDs BEFORE deleting notes, then delete wiki_links via indexed queries
 		const noteIds = await db.notes.where('campaign_id').equals(id).primaryKeys();

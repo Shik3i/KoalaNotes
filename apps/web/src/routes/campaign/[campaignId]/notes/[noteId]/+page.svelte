@@ -93,7 +93,7 @@
 		await updateNote(note.id, { title: title.trim() || 'Untitled', content, tags, sections });
 	}
 
-	async function handleCycleVisibility(heading: string) {
+	function handleCycleVisibility(heading: string) {
 		const cycle: Visibility[] = ['shared', 'gm_only', 'observer', 'private'];
 		const current = sectionVisibility.get(heading) ?? 'shared';
 		const idx = cycle.indexOf(current);
@@ -115,7 +115,7 @@
 		}
 		// Auto-save sections immediately
 		if (note) {
-			await updateNote(note.id, { sections });
+			updateNote(note.id, { sections }).catch(err => console.error('[visibility]', err));
 		}
 	}
 
@@ -208,6 +208,7 @@
 			.replace(/&/g, '&amp;')
 			.replace(/</g, '&lt;')
 			.replace(/>/g, '&gt;')
+			.replace(/"/g, '&quot;')
 			.replace(/^### (.+)$/gm, '<h3>$1</h3>')
 			.replace(/^## (.+)$/gm, '<h2>$1</h2>')
 			.replace(/^# (.+)$/gm, '<h1>$1</h1>')

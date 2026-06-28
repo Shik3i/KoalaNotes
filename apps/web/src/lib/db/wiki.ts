@@ -34,20 +34,20 @@ export async function resolveWikiLinks(
 		return;
 	}
 
-	// Batch-resolve all target titles in one query using compound index
-	const linkData: Array<{ title: string; noteId: string | null }> = [];
-	const titleKeys = [...targets].map(t => [campaignId, t.toLowerCase()] as [string, string]);
-	const matchingNotes = await db.notes
-		.where('[campaign_id+title_lower]')
-		.anyOf(titleKeys)
-		.toArray();
-	const noteByLower = new Map(matchingNotes.map(n => [n.title_lower, n.id]));
-	for (const targetTitle of targets) {
-		linkData.push({ title: targetTitle, noteId: noteByLower.get(targetTitle.toLowerCase()) ?? null });
-	}
+	// Rewrite all wiki_links for this source note (atomic with note lookup)
+	await db.transaction('rw', [db.wiki_links, db.notes], async () => {
+		// Batch-resolve all target titles inside the transaction for consistency
+		const linkData: Array<{ title: string; noteId: string | null }> = [];
+		const titleKeys = [...targets].map(t => [campaignId, t.toLowerCase()] as [string, string]);
+		const matchingNotes = await db.notes
+			.where('[campaign_id+title_lower]')
+			.anyOf(titleKeys)
+			.toArray();
+		const noteByLower = new Map(matchingNotes.map(n => [n.title_lower, n.id]));
+		for (const targetTitle of targets) {
+			linkData.push({ title: targetTitle, noteId: noteByLower.get(targetTitle.toLowerCase()) ?? null });
+		}
 
-	// Rewrite all wiki_links for this source note
-	await db.transaction('rw', db.wiki_links, async () => {
 		// Remove existing links from this source
 		await db.wiki_links.where('source_note_id').equals(noteId).delete();
 
@@ -57,7 +57,7 @@ export async function resolveWikiLinks(
 			.map(({ title, noteId: targetId }) => ({
 				id: uuid(),
 				source_note_id: noteId,
-				target_note_id: targetId ?? '',
+				target_note_id: targetId ?? `__unresolved__:${title}`,
 				context: title,
 				created_at: now
 			}))
@@ -121,12 +121,12 @@ export async function retargetWikiLinks(
 ): Promise<void> {
 	if (oldTitle === newTitle) return;
 
-	const linksToUpdate = await db.wiki_links
-		.where('target_note_id')
-		.equals(noteId)
-		.toArray();
-
 	await db.transaction('rw', db.wiki_links, async () => {
+		const linksToUpdate = await db.wiki_links
+			.where('target_note_id')
+			.equals(noteId)
+			.toArray();
+
 		for (const link of linksToUpdate) {
 			const key: [string, string] = [link.source_note_id, link.target_note_id];
 			if (link.context === oldTitle) {

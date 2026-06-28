@@ -28,33 +28,36 @@ export async function getSession(id: string): Promise<Session | undefined> {
 
 /** Start a new session for a campaign. Returns the session id. */
 export async function startSession(campaignId: string, name?: string): Promise<string> {
-	const now = new Date().toISOString();
+	return db.transaction('rw', db.sessions, async () => {
+		const now = new Date().toISOString();
 
-	// End any currently active session first
-	const active = await db.sessions.where('status').equals('active').first();
-	if (active) {
-		await db.sessions.update(active.id, { status: 'completed', ended_at: now });
-	}
+		// End any currently active session first
+		const active = await db.sessions.where('status').equals('active').first();
+		if (active) {
+			await db.sessions.update(active.id, { status: 'completed', ended_at: now, updated_at: now });
+		}
 
-	// Determine next session number
-	const existing = await db.sessions
-		.where('campaign_id')
-		.equals(campaignId)
-		.count();
+		// Determine next session number atomically
+		const existing = await db.sessions
+			.where('campaign_id')
+			.equals(campaignId)
+			.count();
 
-	const session: Session = {
-		id: uuid(),
-		campaign_id: campaignId,
-		name: name || `Session ${existing + 1}`,
-		session_number: existing + 1,
-		status: 'active',
-		started_at: now,
-		created_at: now,
-		updated_at: now
-	};
+		const id = uuid();
+		const session: Session = {
+			id,
+			campaign_id: campaignId,
+			name: name || `Session ${existing + 1}`,
+			session_number: existing + 1,
+			status: 'active',
+			started_at: now,
+			created_at: now,
+			updated_at: now
+		};
 
-	await db.sessions.add(session);
-	return session.id;
+		await db.sessions.add(session);
+		return id;
+	});
 }
 
 /** Stop an active session. */

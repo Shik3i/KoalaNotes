@@ -114,7 +114,8 @@
 	}
 
 	async function handleFullSync() {
-		if (!masterKey) {
+		const mk = masterKey;
+		if (!mk) {
 			syncStatus = 'error';
 			syncMessage = 'Unlock your encryption key first.';
 			return;
@@ -125,16 +126,14 @@
 		try {
 			// Build encrypt/decrypt closures using per-campaign keys
 			const encryptFn = async (plaintext: string) => {
-				// Parse campaign_id from the payload
 				const data = JSON.parse(plaintext);
 				const campaignId = data.campaign?.id;
 				if (!campaignId) throw new Error('Missing campaign_id in sync payload');
 
-				// Get or create campaign key
 				let keyRecord = await db.crypto_keys.where('campaign_id').equals(campaignId).first();
 				if (!keyRecord) {
 					const campaignKey = await generateCampaignKey();
-					const wrapped = await wrapKey(campaignKey, masterKey!);
+					const wrapped = await wrapKey(campaignKey, mk);
 					keyRecord = {
 						id: crypto.randomUUID(),
 						salt: '',
@@ -148,27 +147,17 @@
 
 				const campaignKey = await unwrapKey(
 					{ iv: keyRecord.iv, ciphertext: keyRecord.wrapped_campaign_key },
-					masterKey!
+					mk
 				);
 				return cryptoEncrypt(plaintext, campaignKey);
 			};
 
-			const decryptFn = async (payload: { iv: string; ciphertext: string }) => {
-				// Can't resolve campaign key without knowing which campaign — decryptFn
-				// will be called in context where we know the blob's campaign_key_id
-				// We'll parse the outer payload to find the key.
-				// For now, assume we have the key for the blob's campaign_key_id.
-				// This is handled in the push/pull functions that iterate blobs.
-				throw new Error('decryptFn must be contextualized per-blob');
-			};
-
-			// For pull, we need to decrypt per-blob with the right campaign key
 			const contextualDecrypt = async (payload: { iv: string; ciphertext: string }, campaignId: string) => {
 				const keyRecord = await db.crypto_keys.where('campaign_id').equals(campaignId).first();
 				if (!keyRecord) throw new Error(`No key for campaign ${campaignId}`);
 				const campaignKey = await unwrapKey(
 					{ iv: keyRecord.iv, ciphertext: keyRecord.wrapped_campaign_key },
-					masterKey!
+					mk
 				);
 				return cryptoDecrypt(payload, campaignKey);
 			};
@@ -182,6 +171,9 @@
 			});
 
 			if (!pullRes.ok) {
+				if (pullRes.status === 401) {
+					auth.set({ token: null, accountId: null, email: null });
+				}
 				const err = await pullRes.json().catch(() => ({ error: 'Pull failed' }));
 				throw new Error(err.error || 'Pull failed');
 			}
@@ -197,11 +189,17 @@
 					);
 					const campaignData = JSON.parse(plaintext);
 
-					if (campaignData.campaign) await db.campaigns.put(campaignData.campaign);
-					if (campaignData.notes) { for (const n of campaignData.notes) await db.notes.put(n); }
-					if (campaignData.sessions) { for (const s of campaignData.sessions) await db.sessions.put(s); }
-					if (campaignData.timeline_entries) { for (const e of campaignData.timeline_entries) await db.timeline_entries.put(e); }
-					if (campaignData.members) { for (const m of campaignData.members) await db.campaign_members.put(m); }
+					// Batch-write all entities for this blob in a single transaction
+					await db.transaction('rw', [
+						db.campaigns, db.notes, db.sessions,
+						db.timeline_entries, db.campaign_members
+					], async () => {
+						if (campaignData.campaign) await db.campaigns.put(campaignData.campaign);
+						if (campaignData.notes?.length) await db.notes.bulkPut(campaignData.notes);
+						if (campaignData.sessions?.length) await db.sessions.bulkPut(campaignData.sessions);
+						if (campaignData.timeline_entries?.length) await db.timeline_entries.bulkPut(campaignData.timeline_entries);
+						if (campaignData.members?.length) await db.campaign_members.bulkPut(campaignData.members);
+					});
 					pulled++;
 				} catch (err) {
 					console.error('[sync] failed to process blob', blob.id, err);
@@ -241,6 +239,9 @@
 				});
 
 				if (!pushRes.ok) {
+					if (pushRes.status === 401) {
+						auth.set({ token: null, accountId: null, email: null });
+					}
 					const err = await pushRes.json().catch(() => ({ error: 'Push failed' }));
 					throw new Error(err.error || 'Push failed');
 				}

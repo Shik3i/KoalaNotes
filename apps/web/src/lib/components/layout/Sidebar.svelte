@@ -75,7 +75,7 @@
 	</div>
 
 	{#if showCreateForm}
-		<form class="create-form" onsubmit={(e) => { e.preventDefault(); handleCreate(); }} aria-label="New campaign">
+		<form class="create-form" onsubmit={async (e) => { e.preventDefault(); try { await handleCreate(); } catch (err) { console.error(err); } }} aria-label="New campaign">
 			<label for="new-campaign-input" class="sr-only">Campaign name</label>
 			<input
 				id="new-campaign-input"

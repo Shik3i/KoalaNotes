@@ -12,8 +12,9 @@ export async function createNote(
 ): Promise<string> {
 	const trimmed = title.trim() || 'Untitled';
 	const now = new Date().toISOString();
+	const id = uuid();
 	const note: Note = {
-		id: uuid(),
+		id,
 		campaign_id,
 		title: trimmed,
 		title_lower: trimmed.toLowerCase(),
@@ -25,10 +26,11 @@ export async function createNote(
 		updated_at: now,
 		pinned: false
 	};
-	await db.notes.add(note);
-	// Resolve wiki links for the new content
-	await resolveWikiLinks(note.id, campaign_id, content, note.title);
-	return note.id;
+	await db.transaction('rw', [db.notes, db.wiki_links], async () => {
+		await db.notes.add(note);
+		await resolveWikiLinks(id, campaign_id, content, note.title);
+	});
+	return id;
 }
 
 /** Update note fields and re-resolve wiki links if content or title changed. */
@@ -36,27 +38,27 @@ export async function updateNote(
 	id: string,
 	changes: Partial<Pick<Note, 'title' | 'content' | 'template_type' | 'tags' | 'pinned' | 'sections'>>
 ): Promise<void> {
-	const old = await db.notes.get(id);
-	if (!old) return;
-
 	await db.transaction('rw', [db.notes, db.wiki_links], async () => {
+		const old = await db.notes.get(id);
+		if (!old) return;
+
 		const payload: Record<string, unknown> = { ...changes, updated_at: new Date().toISOString() };
 		if (changes.title !== undefined) {
 			payload.title_lower = changes.title.trim().toLowerCase();
 		}
 		await db.notes.update(id, payload as any);
+
+		// Re-resolve wiki links if content changed
+		if (changes.content !== undefined) {
+			const newTitle = changes.title ?? old.title;
+			await resolveWikiLinks(id, old.campaign_id, changes.content, newTitle);
+		}
+
+		// Retarget existing wiki links if title changed
+		if (changes.title !== undefined && changes.title !== old.title) {
+			await retargetWikiLinks(id, old.campaign_id, old.title, changes.title);
+		}
 	});
-
-	// Re-resolve wiki links if content changed
-	if (changes.content !== undefined) {
-		const newTitle = changes.title ?? old.title;
-		await resolveWikiLinks(id, old.campaign_id, changes.content, newTitle);
-	}
-
-	// Retarget existing wiki links if title changed
-	if (changes.title !== undefined && changes.title !== old.title) {
-		await retargetWikiLinks(id, old.campaign_id, old.title, changes.title);
-	}
 }
 
 /** Get a single note by id. */

@@ -24,20 +24,22 @@
 
 	// Active session state from Dexie
 	let activeSession = $state<Session | null>(null);
-	let prevSessionId = $state<string | null>(null);
 	$effect(() => {
+		let destroyed = false;
+		let hadSession = false;
 		const observable = observeActiveSession();
 		const sub = observable.subscribe({
 			next: (result) => {
+				if (destroyed) return;
 				const session = result ?? null;
 				// Auto-open timeline only on null→session transition (session start)
-				if (session && !prevSessionId) timelineOpen = true;
-				prevSessionId = session?.id ?? null;
+				if (session && !hadSession) timelineOpen = true;
+				hadSession = !!session;
 				activeSession = session;
 			},
 			error: (err) => console.error('[active session]', err)
 		});
-		return () => sub.unsubscribe();
+		return () => { destroyed = true; sub.unsubscribe(); };
 	});
 
 	// Timer: compute elapsed seconds from started_at
