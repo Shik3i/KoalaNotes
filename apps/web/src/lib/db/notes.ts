@@ -67,9 +67,16 @@ export async function getNotesByCampaign(campaign_id: string): Promise<Note[]> {
 export async function deleteNote(id: string): Promise<void> {
 	await db.transaction('rw', [db.notes, db.wiki_links, db.timeline_entries], async () => {
 		await db.notes.delete(id);
-		await db.wiki_links
-			.filter(l => l.source_note_id === id || l.target_note_id === id)
-			.delete();
+		// Use indexed queries for wiki_links (source_note_id and target_note_id are indexed)
+		const sourceKeys = await db.wiki_links.where('source_note_id').equals(id).primaryKeys();
+		const targetKeys = await db.wiki_links.where('target_note_id').equals(id).primaryKeys();
+		const seen = new Set<string>();
+		const allKeys: [string, string][] = [];
+		for (const k of [...sourceKeys, ...targetKeys]) {
+			const key = `${k[0]}\0${k[1]}`;
+			if (!seen.has(key)) { seen.add(key); allKeys.push(k); }
+		}
+		if (allKeys.length > 0) await db.wiki_links.bulkDelete(allKeys);
 		await db.timeline_entries.where('note_id').equals(id).delete();
 	});
 }

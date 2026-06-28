@@ -60,11 +60,19 @@ export async function archiveCampaign(id: string): Promise<void> {
 export async function deleteCampaign(id: string): Promise<void> {
 	const tables = [db.campaigns, db.notes, db.sessions, db.timeline_entries, db.tags, db.wiki_links, db.campaign_members] as const;
 	await db.transaction('rw', tables, async () => {
-		// Read note IDs BEFORE deleting notes
+		// Read note IDs BEFORE deleting notes, then delete wiki_links via indexed queries
 		const noteIds = await db.notes.where('campaign_id').equals(id).primaryKeys();
-		await db.wiki_links
-			.filter(l => noteIds.includes(l.source_note_id) || noteIds.includes(l.target_note_id))
-			.delete();
+		if (noteIds.length > 0) {
+			const sourceKeys = await db.wiki_links.where('source_note_id').anyOf(noteIds).primaryKeys();
+			const targetKeys = await db.wiki_links.where('target_note_id').anyOf(noteIds).primaryKeys();
+			const seen = new Set<string>();
+			const allKeys: [string, string][] = [];
+			for (const k of [...sourceKeys, ...targetKeys]) {
+				const key = `${k[0]}\0${k[1]}`;
+				if (!seen.has(key)) { seen.add(key); allKeys.push(k); }
+			}
+			if (allKeys.length > 0) await db.wiki_links.bulkDelete(allKeys);
+		}
 		await db.campaigns.delete(id);
 		await db.notes.where('campaign_id').equals(id).delete();
 		await db.sessions.where('campaign_id').equals(id).delete();

@@ -120,7 +120,8 @@ export async function retargetWikiLinks(
 	if (oldTitle === newTitle) return;
 
 	const linksToUpdate = await db.wiki_links
-		.filter(l => l.target_note_id === noteId)
+		.where('target_note_id')
+		.equals(noteId)
 		.toArray();
 
 	await db.transaction('rw', db.wiki_links, async () => {
