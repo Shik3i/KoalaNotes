@@ -10,7 +10,7 @@
 	import TimelinePanel from './TimelinePanel.svelte';
 	import SessionTimer from './SessionTimer.svelte';
 	import LiveCommentBar from './LiveCommentBar.svelte';
-	import type { Role, Session, TimelineEntry, SyncStatus } from '$lib/types/models';
+	import type { Role, Session, TimelineEntry } from '$lib/types/models';
 
 	interface Props {
 		children?: import('svelte').Snippet;
@@ -91,8 +91,8 @@
 	// Current note from URL for comment context
 	let currentNoteId = $derived($page.params.noteId ?? undefined);
 
-	// Sync status: derived from auth token
-	let syncStatus = $derived($auth.token ? 'success' : 'idle');
+	// Sync status: basic indicator derived from auth token
+	let isLoggedIn = $derived(!!$auth.token);
 </script>
 
 <div class="app-shell">
@@ -126,7 +126,7 @@
 			<a href="/settings" class="settings-link" title="Settings" aria-label="Settings">
 				⚙
 			</a>
-			{#if $auth.token && syncStatus === 'success'}
+			{#if $auth.token}
 				<span class="sync-indicator sync-success" title="Connected (sync available)">✓</span>
 			{/if}
 			<button

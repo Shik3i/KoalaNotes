@@ -17,6 +17,16 @@
 	});
 </script>
 
+<svelte:head>
+	<title>KoalaNotes — Privacy-First TTRPG Campaign Notebook</title>
+	<meta name="description" content="KoalaNotes is a privacy-first, local-first campaign notebook for TTRPGs. All data encrypted, never leaves your device. Manage campaigns, notes, sessions, and timelines." />
+	<meta property="og:title" content="KoalaNotes — Privacy-First TTRPG Campaign Notebook" />
+	<meta property="og:description" content="KoalaNotes is a privacy-first, local-first campaign notebook for TTRPGs. All data encrypted, never leaves your device." />
+	<meta property="og:url" content="https://koalanotes.app/" />
+	<meta name="twitter:title" content="KoalaNotes — Privacy-First TTRPG Campaign Notebook" />
+	<meta name="twitter:description" content="KoalaNotes is a privacy-first, local-first campaign notebook for TTRPGs." />
+</svelte:head>
+
 <main class="campaign-list-page">
 	<div class="welcome">
 		<div class="koala-logo" aria-hidden="true">🐨</div>

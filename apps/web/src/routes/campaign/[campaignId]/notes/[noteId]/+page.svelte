@@ -241,8 +241,24 @@
 		return `<p>${html}</p>`;
 	}
 
-	let previewHtml = $derived(renderPreview(content, campaignId, currentRole));
+	// Debounce preview to avoid re-rendering on every keystroke
+	let previewContent = $state('');
+	$effect(() => {
+		const c = content;
+		const delay = previewContent === '' ? 0 : 300;
+		const timer = setTimeout(() => { previewContent = c; }, delay);
+		return () => clearTimeout(timer);
+	});
+
+	let previewHtml = $derived(renderPreview(previewContent, campaignId, currentRole));
 </script>
+
+<svelte:head>
+	<title>{note?.title || 'Untitled'} — {note?.campaign_id ? `Campaign` : ''} KoalaNotes</title>
+	<meta name="description" content="{note?.title || 'Untitled'} — Edit and view TTRPG campaign notes in KoalaNotes." />
+	<meta property="og:title" content="{note?.title || 'Untitled'} — KoalaNotes" />
+	<meta name="twitter:title" content="{note?.title || 'Untitled'} — KoalaNotes" />
+</svelte:head>
 
 <main class="note-editor">
 	{#if note}

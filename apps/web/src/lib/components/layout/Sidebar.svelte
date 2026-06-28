@@ -39,7 +39,6 @@
 			db.notes
 				.where('[campaign_id+title]')
 				.between([activeCampaignId!, ''], [activeCampaignId!, '\uffff'])
-				.limit(100)
 				.toArray()
 		);
 		const sub = observable.subscribe({
@@ -48,6 +47,24 @@
 		});
 		return () => sub.unsubscribe();
 	});
+
+	// Virtual scrolling for note list
+	const ITEM_HEIGHT = 32;
+	const OVERSCAN = 10;
+	let noteListScrollTop = $state(0);
+	let noteListClientHeight = $state(300);
+
+	let totalHeight = $derived(activeNotes.length * ITEM_HEIGHT);
+	let startIdx = $derived(Math.max(0, Math.floor(noteListScrollTop / ITEM_HEIGHT) - OVERSCAN));
+	let endIdx = $derived(Math.min(activeNotes.length, Math.ceil((noteListScrollTop + noteListClientHeight) / ITEM_HEIGHT) + OVERSCAN));
+	let visibleNotes = $derived(activeNotes.slice(startIdx, endIdx));
+	let topPad = $derived(startIdx * ITEM_HEIGHT);
+	let botPad = $derived((activeNotes.length - endIdx) * ITEM_HEIGHT);
+
+	function handleNoteScroll(e: Event) {
+		const el = e.currentTarget as HTMLElement;
+		noteListScrollTop = el.scrollTop;
+	}
 
 	let showCreateForm = $state(false);
 	let newCampaignName = $state('');
@@ -112,8 +129,13 @@
 						</a>
 
 						{#if activeCampaignId === c.id && activeNotes.length > 0}
-							<ul class="note-list" role="group" aria-label="Notes in {c.name}">
-								{#each activeNotes as n (n.id)}
+							<ul class="note-list" role="group" aria-label="Notes in {c.name}"
+								onscroll={handleNoteScroll}
+								bind:clientHeight={noteListClientHeight}
+								style="max-height: min(40vh, 400px); overflow-y: auto;"
+							>
+								<li style="height: {topPad}px; pointer-events: none;" aria-hidden="true"></li>
+								{#each visibleNotes as n (n.id)}
 									<li role="treeitem" aria-selected={$page.params.noteId === n.id}>
 										<a
 											href="/campaign/{c.id}/notes/{n.id}"
@@ -125,6 +147,7 @@
 										</a>
 									</li>
 								{/each}
+								<li style="height: {botPad}px; pointer-events: none;" aria-hidden="true"></li>
 							</ul>
 						{/if}
 					</li>

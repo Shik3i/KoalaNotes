@@ -4,17 +4,28 @@ export interface AuthState {
 	token: string | null;
 	accountId: string | null;
 	email: string | null;
+	locked: boolean;
 }
 
 const STORAGE_KEY = 'koalanotes:auth';
+const BROADCAST_CHANNEL = 'koalanotes:auth';
+const IDLE_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes
 
 function getStored(): AuthState {
-	if (typeof localStorage === 'undefined') return { token: null, accountId: null, email: null };
+	if (typeof localStorage === 'undefined') return { token: null, accountId: null, email: null, locked: true };
 	try {
 		const raw = localStorage.getItem(STORAGE_KEY);
-		if (raw) return JSON.parse(raw);
+		if (raw) {
+			const parsed = JSON.parse(raw);
+			return {
+				token: parsed.token ?? null,
+				accountId: parsed.accountId ?? null,
+				email: parsed.email ?? null,
+				locked: parsed.locked ?? true
+			};
+		}
 	} catch { /* ignore */ }
-	return { token: null, accountId: null, email: null };
+	return { token: null, accountId: null, email: null, locked: true };
 }
 
 function persist(state: AuthState) {
@@ -33,10 +44,28 @@ function clearStored() {
 	} catch { /* ignore */ }
 }
 
-/** Auth state: token, accountId, email. Persisted to localStorage. */
+/** Auth state: token, accountId, email, locked. Persisted to localStorage. */
 export const auth = writable<AuthState>(getStored());
 
-// Sync auth state across tabs
+// ---- BroadcastChannel cross-tab sync ----
+
+const bc = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel(BROADCAST_CHANNEL) : null;
+
+if (bc) {
+	bc.onmessage = (event) => {
+		const data = event.data;
+		if (data?.type === 'auth') {
+			auth.set({
+				token: data.token ?? null,
+				accountId: data.accountId ?? null,
+				email: data.email ?? null,
+				locked: data.locked ?? true
+			});
+		}
+	};
+}
+
+// Fallback: storage event for older browsers
 if (typeof window !== 'undefined') {
 	window.addEventListener('storage', (e) => {
 		if (e.key === STORAGE_KEY) {
@@ -44,6 +73,14 @@ if (typeof window !== 'undefined') {
 		}
 	});
 }
+
+function broadcast(state: AuthState) {
+	if (bc) {
+		bc.postMessage({ type: 'auth', ...state });
+	}
+}
+
+// ---- Persist on subscribe (batched via queueMicrotask) ----
 
 let persistPending: AuthState | null = null;
 let persistScheduled = false;
@@ -88,11 +125,68 @@ auth.subscribe((v) => {
 		if (ms >= 0 && ms <= 86400000) {
 			expiryTimer = setTimeout(() => {
 				console.warn('[auth] token expired, logging out');
-				auth.set({ token: null, accountId: null, email: null });
+				auth.set({ token: null, accountId: null, email: null, locked: true });
 			}, ms);
 		}
 	}
 });
+
+// ---- Idle timeout (auto-lock) ----
+
+let idleTimer: ReturnType<typeof setTimeout> | undefined;
+let activityHandler: (() => void) | undefined;
+
+function resetIdleTimer() {
+	if (idleTimer) { clearTimeout(idleTimer); idleTimer = undefined; }
+	const current = getStored();
+	if (!current.token || current.locked) return;
+	idleTimer = setTimeout(() => {
+		console.warn('[auth] idle timeout — locking key');
+		auth.update((prev) => ({ ...prev, locked: true }));
+	}, IDLE_TIMEOUT_MS);
+}
+
+function handleActivity() {
+	resetIdleTimer();
+}
+
+function startIdleTracking() {
+	if (typeof document === 'undefined' || activityHandler) return;
+	activityHandler = handleActivity;
+	document.addEventListener('mousedown', handleActivity, { passive: true });
+	document.addEventListener('keydown', handleActivity, { passive: true });
+	document.addEventListener('touchstart', handleActivity, { passive: true });
+	document.addEventListener('scroll', handleActivity, { passive: true });
+	resetIdleTimer();
+}
+
+function stopIdleTracking() {
+	if (idleTimer) { clearTimeout(idleTimer); idleTimer = undefined; }
+	if (typeof document === 'undefined' || !activityHandler) return;
+	document.removeEventListener('mousedown', activityHandler);
+	document.removeEventListener('keydown', activityHandler);
+	document.removeEventListener('touchstart', activityHandler);
+	document.removeEventListener('scroll', activityHandler);
+	activityHandler = undefined;
+}
+
+// Start/stop idle tracking based on lock state
+auth.subscribe((v) => {
+	if (v.token && !v.locked) {
+		startIdleTracking();
+	} else {
+		stopIdleTracking();
+	}
+});
+
+/** Update lock state and broadcast to other tabs. */
+export function setLocked(locked: boolean): void {
+	auth.update((prev) => {
+		const next = { ...prev, locked };
+		broadcast(next);
+		return next;
+	});
+}
 
 /** Register a new account and update the auth store. */
 export async function register(email: string, password: string): Promise<void> {
@@ -108,7 +202,9 @@ export async function register(email: string, password: string): Promise<void> {
 	}
 
 	const data: AuthResponse = await res.json();
-	auth.set({ token: data.token, accountId: data.account_id, email: data.email });
+	const state: AuthState = { token: data.token, accountId: data.account_id, email: data.email, locked: true };
+	auth.set(state);
+	broadcast(state);
 }
 
 /** Login with email and password, update the auth store. */
@@ -125,10 +221,14 @@ export async function login(email: string, password: string): Promise<void> {
 	}
 
 	const data: AuthResponse = await res.json();
-	auth.set({ token: data.token, accountId: data.account_id, email: data.email });
+	const state: AuthState = { token: data.token, accountId: data.account_id, email: data.email, locked: true };
+	auth.set(state);
+	broadcast(state);
 }
 
-/** Logout: clear auth state. */
+/** Logout: clear auth state and lock key. */
 export function logout(): void {
-	auth.set({ token: null, accountId: null, email: null });
+	const state: AuthState = { token: null, accountId: null, email: null, locked: true };
+	auth.set(state);
+	broadcast(state);
 }

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { auth, register, login, logout } from '$lib/stores/auth';
+	import { auth, register, login, logout, setLocked } from '$lib/stores/auth';
 	import { db } from '$lib/db/database';
 	import { deriveKey, generateSalt, deriveSaltFromPassword, generateCampaignKey, exportKeyAsBase64, uint8ArrayToBase64, base64ToUint8Array } from '$lib/crypto/keys';
 	import { encrypt as cryptoEncrypt, decrypt as cryptoDecrypt, wrapKey, unwrapKey } from '$lib/crypto/encrypt';
@@ -18,6 +18,14 @@
 	// Sync state
 	let syncStatus = $state<SyncStatus>('idle');
 	let syncMessage = $state('');
+
+	// Auto-lock: clear master key when auth store signals lock
+	$effect(() => {
+		if ($auth.locked) {
+			masterKey = null;
+			keyReady = false;
+		}
+	});
 
 	async function handleRegister(e: Event) {
 		e.preventDefault();
@@ -109,11 +117,12 @@
 				});
 			}
 
-			keyReady = true;
-		} catch (err) {
-			keySetupError = err instanceof Error ? err.message : 'Key setup failed';
-			masterKey = null;
-		}
+		keyReady = true;
+		setLocked(false);
+	} catch (err) {
+		keySetupError = err instanceof Error ? err.message : 'Key setup failed';
+		masterKey = null;
+	}
 	}
 
 	async function unlockKey() {
@@ -161,6 +170,7 @@
 			});
 
 			keyReady = true;
+			setLocked(false);
 		} catch (err) {
 			keySetupError = err instanceof Error ? err.message : 'Unlock failed';
 		}
@@ -224,9 +234,9 @@
 			});
 
 			if (!pullRes.ok) {
-				if (pullRes.status === 401) {
-					auth.set({ token: null, accountId: null, email: null });
-				}
+			if (pullRes.status === 401) {
+				auth.set({ token: null, accountId: null, email: null, locked: true });
+			}
 				const err = await pullRes.json().catch(() => ({ error: 'Pull failed' }));
 				throw new Error(err.error || 'Pull failed');
 			}
@@ -292,9 +302,9 @@
 				});
 
 				if (!pushRes.ok) {
-					if (pushRes.status === 401) {
-						auth.set({ token: null, accountId: null, email: null });
-					}
+				if (pushRes.status === 401) {
+					auth.set({ token: null, accountId: null, email: null, locked: true });
+				}
 					const err = await pushRes.json().catch(() => ({ error: 'Push failed' }));
 					throw new Error(err.error || 'Push failed');
 				}
@@ -311,6 +321,13 @@
 		}
 	}
 </script>
+
+<svelte:head>
+	<title>Settings — KoalaNotes</title>
+	<meta name="description" content="Account settings, encryption key management, sync, and data export for KoalaNotes." />
+	<meta property="og:title" content="Settings — KoalaNotes" />
+	<meta name="twitter:title" content="Settings — KoalaNotes" />
+</svelte:head>
 
 <h1>Settings</h1>
 

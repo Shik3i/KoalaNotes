@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -34,6 +35,13 @@ func setupTestDB(t *testing.T) *db.DB {
 	}
 	t.Cleanup(func() { database.Close() })
 	return database
+}
+
+func decodeJSON(t *testing.T, body *bytes.Buffer, v any) {
+	t.Helper()
+	if err := json.NewDecoder(body).Decode(v); err != nil {
+		t.Fatalf("failed to decode json: %v", err)
+	}
 }
 
 func registerAccount(t *testing.T, database *db.DB, email, password string) *httptest.ResponseRecorder {
@@ -96,6 +104,34 @@ func pullBlobs(t *testing.T, database *db.DB, token, since string) *httptest.Res
 	return rec
 }
 
+func decodeAuthResponse(t *testing.T, rec *httptest.ResponseRecorder) AuthResponse {
+	t.Helper()
+	var resp AuthResponse
+	decodeJSON(t, rec.Body, &resp)
+	return resp
+}
+
+func decodePushResponse(t *testing.T, rec *httptest.ResponseRecorder) PushResponse {
+	t.Helper()
+	var resp PushResponse
+	decodeJSON(t, rec.Body, &resp)
+	return resp
+}
+
+func decodePullResponse(t *testing.T, rec *httptest.ResponseRecorder) PullResponse {
+	t.Helper()
+	var resp PullResponse
+	decodeJSON(t, rec.Body, &resp)
+	return resp
+}
+
+func decodeErrorResponse(t *testing.T, rec *httptest.ResponseRecorder) ErrorResponse {
+	t.Helper()
+	var resp ErrorResponse
+	decodeJSON(t, rec.Body, &resp)
+	return resp
+}
+
 // ---- Auth Tests ----
 
 func TestRegister_Success(t *testing.T) {
@@ -106,11 +142,7 @@ func TestRegister_Success(t *testing.T) {
 		t.Errorf("expected status 201, got %d", rec.Code)
 	}
 
-	var resp AuthResponse
-	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-
+	resp := decodeAuthResponse(t, rec)
 	if resp.Email != "test@example.com" {
 		t.Errorf("expected email 'test@example.com', got '%s'", resp.Email)
 	}
@@ -131,8 +163,7 @@ func TestRegister_DuplicateEmail(t *testing.T) {
 		t.Errorf("expected status 409 for duplicate email, got %d", rec.Code)
 	}
 
-	var errResp ErrorResponse
-	json.NewDecoder(rec.Body).Decode(&errResp)
+	errResp := decodeErrorResponse(t, rec)
 	if errResp.Error == "" {
 		t.Error("expected error message for duplicate email")
 	}
@@ -169,11 +200,7 @@ func TestLogin_Success(t *testing.T) {
 		t.Errorf("expected status 200, got %d", rec.Code)
 	}
 
-	var resp AuthResponse
-	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-
+	resp := decodeAuthResponse(t, rec)
 	if resp.Email != "login@example.com" {
 		t.Errorf("expected email 'login@example.com', got '%s'", resp.Email)
 	}
@@ -213,9 +240,12 @@ func TestLogin_EmailCaseInsensitive(t *testing.T) {
 
 // ---- Sync Tests ----
 
+var testBlobCounter int64
+
 func newTestBlob(campaignID, payload string) db.BlobRecord {
+	testBlobCounter++
 	return db.BlobRecord{
-		ID:               campaignID,
+		ID:               fmt.Sprintf("blob-%s-%d", campaignID, testBlobCounter),
 		CampaignKeyID:    campaignID,
 		EncryptedPayload: payload,
 		VectorClock:      "2026-01-01T00:00:00Z",
@@ -240,8 +270,7 @@ func TestPushPull_RoundTrip(t *testing.T) {
 	registerAccount(t, database, "sync@example.com", "password")
 	loginRec := loginAccount(t, database, "sync@example.com", "password")
 
-	var loginResp AuthResponse
-	json.NewDecoder(loginRec.Body).Decode(&loginResp)
+	loginResp := decodeAuthResponse(t, loginRec)
 	token := loginResp.Token
 
 	// Push two blobs
@@ -255,8 +284,7 @@ func TestPushPull_RoundTrip(t *testing.T) {
 		t.Errorf("expected status 200 for push, got %d", pushRec.Code)
 	}
 
-	var pushResp PushResponse
-	json.NewDecoder(pushRec.Body).Decode(&pushResp)
+	pushResp := decodePushResponse(t, pushRec)
 	if pushResp.Accepted != 2 {
 		t.Errorf("expected 2 accepted blobs, got %d", pushResp.Accepted)
 	}
@@ -267,8 +295,7 @@ func TestPushPull_RoundTrip(t *testing.T) {
 		t.Errorf("expected status 200 for pull, got %d", pullRec.Code)
 	}
 
-	var pullResp PullResponse
-	json.NewDecoder(pullRec.Body).Decode(&pullResp)
+	pullResp := decodePullResponse(t, pullRec)
 	if len(pullResp.Blobs) != 2 {
 		t.Errorf("expected 2 blobs in pull, got %d", len(pullResp.Blobs))
 	}
@@ -279,8 +306,7 @@ func TestPushPull_Incremental(t *testing.T) {
 	registerAccount(t, database, "incr@example.com", "password")
 	loginRec := loginAccount(t, database, "incr@example.com", "password")
 
-	var loginResp AuthResponse
-	json.NewDecoder(loginRec.Body).Decode(&loginResp)
+	loginResp := decodeAuthResponse(t, loginRec)
 	token := loginResp.Token
 
 	// Push initial blob
@@ -294,17 +320,16 @@ func TestPushPull_Incremental(t *testing.T) {
 	if pullRec.Code != http.StatusOK {
 		t.Errorf("expected status 200, got %d", pullRec.Code)
 	}
-	var pullResp PullResponse
-	json.NewDecoder(pullRec.Body).Decode(&pullResp)
+	pullResp := decodePullResponse(t, pullRec)
 	if len(pullResp.Blobs) != 1 {
 		t.Errorf("expected 1 blob with old since, got %d", len(pullResp.Blobs))
 	}
 
 	// Pull with a since time after creation (should get nothing)
 	pullRec2 := pullBlobs(t, database, token, "2099-01-01T00:00:00Z")
-	json.NewDecoder(pullRec2.Body).Decode(&pullResp)
-	if len(pullResp.Blobs) != 0 {
-		t.Errorf("expected 0 blobs with future since, got %d", len(pullResp.Blobs))
+	pullResp2 := decodePullResponse(t, pullRec2)
+	if len(pullResp2.Blobs) != 0 {
+		t.Errorf("expected 0 blobs with future since, got %d", len(pullResp2.Blobs))
 	}
 }
 
@@ -314,13 +339,11 @@ func TestPushPull_IsolatedByAccount(t *testing.T) {
 	// Register two accounts
 	registerAccount(t, database, "alice@example.com", "password")
 	aliceLogin := loginAccount(t, database, "alice@example.com", "password")
-	var alice AuthResponse
-	json.NewDecoder(aliceLogin.Body).Decode(&alice)
+	alice := decodeAuthResponse(t, aliceLogin)
 
 	registerAccount(t, database, "bob@example.com", "password")
 	bobLogin := loginAccount(t, database, "bob@example.com", "password")
-	var bob AuthResponse
-	json.NewDecoder(bobLogin.Body).Decode(&bob)
+	bob := decodeAuthResponse(t, bobLogin)
 
 	// Alice pushes a blob
 	pushBlobs(t, database, alice.Token, []db.BlobRecord{
@@ -329,16 +352,14 @@ func TestPushPull_IsolatedByAccount(t *testing.T) {
 
 	// Bob pulls — should get nothing
 	bobPull := pullBlobs(t, database, bob.Token, "")
-	var bobPullResp PullResponse
-	json.NewDecoder(bobPull.Body).Decode(&bobPullResp)
+	bobPullResp := decodePullResponse(t, bobPull)
 	if len(bobPullResp.Blobs) != 0 {
 		t.Errorf("expected bob to see 0 blobs, got %d", len(bobPullResp.Blobs))
 	}
 
 	// Alice pulls — should get her blob
 	alicePull := pullBlobs(t, database, alice.Token, "")
-	var alicePullResp PullResponse
-	json.NewDecoder(alicePull.Body).Decode(&alicePullResp)
+	alicePullResp := decodePullResponse(t, alicePull)
 	if len(alicePullResp.Blobs) != 1 {
 		t.Errorf("expected alice to see 1 blob, got %d", len(alicePullResp.Blobs))
 	}
@@ -348,19 +369,23 @@ func TestPush_UpdatesExistingBlob(t *testing.T) {
 	database := setupTestDB(t)
 	registerAccount(t, database, "update@example.com", "password")
 	loginRec := loginAccount(t, database, "update@example.com", "password")
-	var loginResp AuthResponse
-	json.NewDecoder(loginRec.Body).Decode(&loginResp)
+	loginResp := decodeAuthResponse(t, loginRec)
 	token := loginResp.Token
 
 	// Push initial
 	pushBlobs(t, database, token, []db.BlobRecord{
-		newTestBlob("campaign-upd", `{"iv":"b2xk","ciphertext":"ZGF0YQ=="}`),
+		{
+			ID:               "blob-campaign-upd",
+			CampaignKeyID:    "campaign-upd",
+			EncryptedPayload: `{"iv":"b2xk","ciphertext":"ZGF0YQ=="}`,
+			VectorClock:      "2026-01-01T00:00:00Z",
+		},
 	})
 
-	// Push update with different payload
+	// Push update with different payload (same ID as initial push)
 	pushBlobs(t, database, token, []db.BlobRecord{
 		{
-			ID:               "campaign-upd",
+			ID:               "blob-campaign-upd",
 			CampaignKeyID:    "campaign-upd",
 			EncryptedPayload: `{"iv":"bmV3","ciphertext":"ZGF0YQ=="}`,
 			VectorClock:      "2026-06-01T00:00:00Z",
@@ -369,8 +394,7 @@ func TestPush_UpdatesExistingBlob(t *testing.T) {
 
 	// Pull — should have 1 blob with the new payload
 	pullRec := pullBlobs(t, database, token, "")
-	var pullResp PullResponse
-	json.NewDecoder(pullRec.Body).Decode(&pullResp)
+	pullResp := decodePullResponse(t, pullRec)
 	if len(pullResp.Blobs) != 1 {
 		t.Fatalf("expected 1 blob after update, got %d", len(pullResp.Blobs))
 	}
@@ -411,10 +435,7 @@ func TestRegister_InvalidEmail(t *testing.T) {
 			if rec.Code != http.StatusBadRequest {
 				t.Errorf("expected status 400, got %d", rec.Code)
 			}
-			var errResp ErrorResponse
-			if err := json.NewDecoder(rec.Body).Decode(&errResp); err != nil {
-				t.Fatalf("failed to decode error: %v", err)
-			}
+			errResp := decodeErrorResponse(t, rec)
 			if errResp.Error == "" {
 				t.Error("expected non-empty error message")
 			}

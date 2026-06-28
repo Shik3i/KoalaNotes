@@ -129,7 +129,7 @@ export async function pull(
 		}
 
 		if (!res.ok) {
-			if (res.status === 401) auth.set({ token: null, accountId: null, email: null });
+			if (res.status === 401) auth.set({ token: null, accountId: null, email: null, locked: true });
 			const err = await res.json().catch(() => ({ error: 'Pull failed' }));
 			throw new Error(err.error || 'Pull failed');
 		}
@@ -249,7 +249,7 @@ export async function push(
 		}
 
 		if (!res.ok) {
-			if (res.status === 401) auth.set({ token: null, accountId: null, email: null });
+			if (res.status === 401) auth.set({ token: null, accountId: null, email: null, locked: true });
 			const err = await res.json().catch(() => ({ error: 'Push failed' }));
 			throw new Error(err.error || 'Push failed');
 		}

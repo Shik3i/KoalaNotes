@@ -5,6 +5,7 @@
 	import { seedTemplates, getAllTemplates } from '$lib/db/templates';
 	import { exportNotesAsMarkdown } from '$lib/utils/export';
 	import { observeSessionsByCampaign, startSession, stopSession, observeActiveSession, createSessionRecap } from '$lib/db/sessions';
+	import { triggerAutoSync } from '$lib/services/sync';
 	import { observeMembers, addMember, removeMember, updateMemberRole } from '$lib/db/members';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
@@ -194,8 +195,24 @@
 		return () => { cancelled = true; };
 	});
 
+	// Manual sync
+	let syncStatus = $state<'idle' | 'syncing' | 'error' | 'success'>('idle');
+
+	async function handleSync() {
+		syncStatus = 'syncing';
+		try {
+			await triggerAutoSync();
+			syncStatus = 'success';
+			setTimeout(() => { if (syncStatus === 'success') syncStatus = 'idle'; }, 2000);
+		} catch {
+			syncStatus = 'error';
+			setTimeout(() => { if (syncStatus === 'error') syncStatus = 'idle'; }, 4000);
+		}
+	}
+
 	async function handleCreateNote(type?: TemplateType) {
 		const id = await createNote(campaignId, 'Untitled', '', type || 'blank');
+		triggerAutoSync();
 		showTemplatePicker = false;
 		await goto(`/campaign/${campaignId}/notes/${id}`);
 	}
@@ -204,6 +221,15 @@
 		await handleCreateNote('blank');
 	}
 </script>
+
+<svelte:head>
+	<title>{campaign?.name ?? 'Campaign'} — KoalaNotes</title>
+	<meta name="description" content="{campaign?.description || `Campaign: ${campaign?.name || 'Untitled'}`} — Manage notes, sessions, and members for this TTRPG campaign." />
+	<meta property="og:title" content="{campaign?.name ?? 'Campaign'} — KoalaNotes" />
+	<meta property="og:description" content="{campaign?.description || `Manage notes, sessions, and members for ${campaign?.name || 'this'} TTRPG campaign.`}" />
+	<meta name="twitter:title" content="{campaign?.name ?? 'Campaign'} — KoalaNotes" />
+	<meta name="twitter:description" content="{campaign?.description || `Manage notes, sessions, and members for ${campaign?.name || 'this'} TTRPG campaign.`}" />
+</svelte:head>
 
 <main class="campaign-page">
 	{#if campaign}
@@ -219,6 +245,18 @@
 						Export All
 					</button>
 				{/if}
+				<button
+					class="action-btn sync-btn"
+					class:syncing={syncStatus === 'syncing'}
+					class:sync-error={syncStatus === 'error'}
+					class:sync-success={syncStatus === 'success'}
+					onclick={handleSync}
+					disabled={syncStatus === 'syncing'}
+					aria-label="Sync campaign data"
+					title="Sync campaign data"
+				>
+					{syncStatus === 'syncing' ? '⟳' : syncStatus === 'error' ? '⚠' : syncStatus === 'success' ? '✓' : '↻'}
+				</button>
 				</div>
 			</div>
 			{#if campaign.description}
