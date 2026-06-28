@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { auth, register, login, logout } from '$lib/stores/auth';
 	import { db } from '$lib/db/database';
-	import { deriveKey, generateSalt, generateCampaignKey, exportKeyAsBase64, uint8ArrayToBase64, base64ToUint8Array } from '$lib/crypto/keys';
+	import { deriveKey, generateSalt, deriveSaltFromPassword, generateCampaignKey, exportKeyAsBase64, uint8ArrayToBase64, base64ToUint8Array } from '$lib/crypto/keys';
 	import { encrypt as cryptoEncrypt, decrypt as cryptoDecrypt, wrapKey, unwrapKey } from '$lib/crypto/encrypt';
 	import { fullSync, pull, push } from '$lib/services/sync';
 	import type { SyncStatus } from '$lib/types/models';
@@ -98,12 +98,24 @@
 	async function unlockKey() {
 		keySetupError = '';
 		try {
+			// Try stored salt first (backward compat), fall back to deterministic salt
 			const saltRecord = await db.crypto_keys.where('campaign_id').equals(SALT_CAMPAIGN_ID).first();
-			if (!saltRecord || !saltRecord.salt) {
-				keySetupError = 'No key salt found. Use "Set Up Key" first.';
-				return;
+			let salt: Uint8Array;
+			if (saltRecord?.salt) {
+				salt = base64ToUint8Array(saltRecord.salt);
+			} else {
+				// Deterministic salt derived from password — enables recovery after data loss
+				salt = await deriveSaltFromPassword(password);
+				// Cache the derived salt for future use
+				await db.crypto_keys.put({
+					id: SALT_RECORD_ID,
+					salt: uint8ArrayToBase64(salt),
+					wrapped_campaign_key: '',
+					iv: '',
+					campaign_id: SALT_CAMPAIGN_ID,
+					created_at: new Date().toISOString()
+				});
 			}
-			const salt = base64ToUint8Array(saltRecord.salt);
 			const key = await deriveKey(password, salt);
 			masterKey = key;
 			password = ''; // clear from memory

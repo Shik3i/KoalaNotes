@@ -43,6 +43,25 @@ export function generateSalt(): Uint8Array {
 	return crypto.getRandomValues(new Uint8Array(SALT_LENGTH));
 }
 
+/**
+ * Derive a deterministic 16-byte salt from a password using HMAC-SHA256.
+ * Used as fallback when the stored salt is lost (e.g., cleared IndexedDB).
+ * This ensures the master key can always be recovered with just the password,
+ * preventing permanent data loss.
+ */
+export async function deriveSaltFromPassword(password: string): Promise<Uint8Array> {
+	const enc = new TextEncoder();
+	const key = await crypto.subtle.importKey(
+		'raw',
+		enc.encode('koalanotes-salt-derivation-v1'),
+		{ name: 'HMAC', hash: 'SHA-256' },
+		false,
+		['sign']
+	);
+	const hmac = await crypto.subtle.sign('HMAC', key, enc.encode(password));
+	return new Uint8Array(hmac).slice(0, SALT_LENGTH);
+}
+
 /** Generate a new random AES-256-GCM key for a campaign. */
 export async function generateCampaignKey(): Promise<CryptoKey> {
 	return crypto.subtle.generateKey(
