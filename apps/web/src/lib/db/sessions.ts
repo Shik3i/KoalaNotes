@@ -141,11 +141,12 @@ export async function createSessionRecap(sessionId: string): Promise<string> {
 		pinned: false
 	};
 
+	// Import wiki module outside the transaction to avoid breaking Dexie's zone
+	const { resolveWikiLinks } = await import('./wiki');
+
 	await db.transaction('rw', [db.notes, db.sessions, db.wiki_links], async () => {
 		await db.notes.add(recapNote);
 		await db.sessions.update(sessionId, { recap_note_id: recapNote.id, updated_at: now });
-		// Resolve wiki links within the recap content
-		const { resolveWikiLinks } = await import('./wiki');
 		await resolveWikiLinks(recapNote.id, session.campaign_id, content, recapNote.title);
 	});
 

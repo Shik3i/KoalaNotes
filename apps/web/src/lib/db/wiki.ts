@@ -119,7 +119,6 @@ export async function retargetWikiLinks(
 ): Promise<void> {
 	if (oldTitle === newTitle) return;
 
-	const now = new Date().toISOString();
 	const linksToUpdate = await db.wiki_links
 		.filter(l => l.target_note_id === noteId)
 		.toArray();
@@ -127,10 +126,9 @@ export async function retargetWikiLinks(
 	await db.transaction('rw', db.wiki_links, async () => {
 		for (const link of linksToUpdate) {
 			const key: [string, string] = [link.source_note_id, link.target_note_id];
-			await db.wiki_links.update(key, {
-				context: link.context === oldTitle ? newTitle : link.context,
-				created_at: now
-			});
+			if (link.context === oldTitle) {
+				await db.wiki_links.update(key, { context: newTitle });
+			}
 		}
 	});
 }

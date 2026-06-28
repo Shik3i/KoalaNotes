@@ -19,17 +19,6 @@
 	let syncStatus = $state<SyncStatus>('idle');
 	let syncMessage = $state('');
 
-	// Check if we have a salt stored (key already set up)
-	$effect(() => {
-		if ($auth.token && !masterKey) {
-			db.crypto_keys.toArray().then(keys => {
-				if (keys.length > 0) {
-					keyReady = true;
-				}
-			});
-		}
-	});
-
 	async function handleRegister(e: Event) {
 		e.preventDefault();
 		error = '';
@@ -58,6 +47,7 @@
 	}
 
 	const SALT_CAMPAIGN_ID = '__salt__';
+	const SALT_RECORD_ID = '__salt_record__';
 
 	async function setupKey() {
 		keySetupError = '';
@@ -67,9 +57,9 @@
 
 		const saltB64 = uint8ArrayToBase64(salt);
 
-		// Always upsert the salt record
+		// Always upsert the salt record (fixed ID ensures single row)
 		await db.crypto_keys.put({
-			id: crypto.randomUUID(),
+			id: SALT_RECORD_ID,
 			salt: saltB64,
 			wrapped_campaign_key: '',
 			iv: '',
@@ -245,7 +235,7 @@
 				}
 
 				const pushData = await pushRes.json();
-				pushed = pushData.accepted;
+				pushed = pushData.accepted ?? 0;
 			}
 
 			syncStatus = 'success';

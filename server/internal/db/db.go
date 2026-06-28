@@ -104,13 +104,15 @@ func (d *DB) AccountExists(email string) (bool, error) {
 
 // UpsertBlob inserts or replaces a blob record.
 func (d *DB) UpsertBlob(blob BlobRecord) error {
+	now := time.Now().UTC().Format(time.RFC3339)
 	_, err := d.conn.Exec(
 		`INSERT INTO blob_records (id, account_id, campaign_key_id, encrypted_payload, vector_clock, created_at)
 		 VALUES (?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(id) DO UPDATE SET
 			encrypted_payload = excluded.encrypted_payload,
-			vector_clock = excluded.vector_clock`,
-		blob.ID, blob.AccountID, blob.CampaignKeyID, blob.EncryptedPayload, blob.VectorClock, time.Now().UTC().Format(time.RFC3339),
+			vector_clock = excluded.vector_clock,
+			created_at = excluded.created_at`,
+		blob.ID, blob.AccountID, blob.CampaignKeyID, blob.EncryptedPayload, blob.VectorClock, now,
 	)
 	return err
 }
@@ -128,7 +130,8 @@ func (d *DB) UpsertBlobs(blobs []BlobRecord) error {
 		 VALUES (?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(id) DO UPDATE SET
 			encrypted_payload = excluded.encrypted_payload,
-			vector_clock = excluded.vector_clock`,
+			vector_clock = excluded.vector_clock,
+			created_at = excluded.created_at`,
 	)
 	if err != nil {
 		return err

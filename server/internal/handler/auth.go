@@ -2,7 +2,9 @@ package handler
 
 import (
 	"crypto/rand"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -98,7 +100,11 @@ func NewLoginHandler(database *db.DB, jwtSecret []byte) http.HandlerFunc {
 
 		id, passwordHash, err := database.GetAccountByEmail(req.Email)
 		if err != nil {
-			writeJSON(w, http.StatusUnauthorized, ErrorResponse{Error: "invalid email or password"})
+			if errors.Is(err, sql.ErrNoRows) {
+				writeJSON(w, http.StatusUnauthorized, ErrorResponse{Error: "invalid email or password"})
+			} else {
+				writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "internal error"})
+			}
 			return
 		}
 
