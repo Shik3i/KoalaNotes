@@ -1,24 +1,85 @@
 <script lang="ts">
+	import { liveQuery } from 'dexie';
+	import { db } from '$lib/db/database';
+	import { observeActiveSession } from '$lib/db/sessions';
+	import { observeSessionEntries } from '$lib/db/timeline';
+	import { viewingRole } from '$lib/stores/role';
+	import { page } from '$app/stores';
 	import Sidebar from './Sidebar.svelte';
 	import TimelinePanel from './TimelinePanel.svelte';
 	import SessionTimer from './SessionTimer.svelte';
 	import LiveCommentBar from './LiveCommentBar.svelte';
+	import type { Role, Session, TimelineEntry } from '$lib/types/models';
 
 	interface Props {
-		sidebarOpen?: boolean;
-		timelineOpen?: boolean;
-		sessionActive?: boolean;
-		sessionElapsed?: number;
 		children?: import('svelte').Snippet;
 	}
 
-	let {
-		sidebarOpen = true,
-		timelineOpen = false,
-		sessionActive = false,
-		sessionElapsed = 0,
-		children
-	}: Props = $props();
+	let { children }: Props = $props();
+
+	// Sidebar / timeline toggle state
+	let sidebarOpen = $state(true);
+	let timelineOpen = $state(false);
+
+	// Active session state from Dexie
+	let activeSession = $state<Session | null>(null);
+	$effect(() => {
+		const observable = observeActiveSession();
+		const sub = observable.subscribe({
+			next: (result) => {
+				activeSession = result ?? null;
+				// Auto-open timeline when session starts
+				if (result) timelineOpen = true;
+			},
+			error: (err) => console.error('[active session]', err)
+		});
+		return () => sub.unsubscribe();
+	});
+
+	// Timer: compute elapsed seconds from started_at
+	let elapsedSeconds = $state(0);
+	let timerInterval: ReturnType<typeof setInterval> | undefined;
+
+	$effect(() => {
+		if (activeSession?.started_at) {
+			// Initialize elapsed from session start
+			const started = new Date(activeSession.started_at).getTime();
+			elapsedSeconds = Math.floor((Date.now() - started) / 1000);
+
+			// Tick every second
+			timerInterval = setInterval(() => {
+				elapsedSeconds = Math.floor((Date.now() - started) / 1000);
+			}, 1000);
+
+			return () => {
+				if (timerInterval) clearInterval(timerInterval);
+			};
+		} else {
+			elapsedSeconds = 0;
+			if (timerInterval) {
+				clearInterval(timerInterval);
+				timerInterval = undefined;
+			}
+		}
+	});
+
+	// Timeline entries for active session
+	let timelineEntries = $state<TimelineEntry[]>([]);
+	$effect(() => {
+		if (!activeSession) {
+			timelineEntries = [];
+			return;
+		}
+		const observable = observeSessionEntries(activeSession.id);
+		const sub = observable.subscribe({
+			next: (result) => { timelineEntries = result; },
+			error: (err) => console.error('[timeline]', err)
+		});
+		return () => sub.unsubscribe();
+	});
+
+	// Current note from URL for comment context
+	let currentNoteId = $derived($page.params.noteId ?? undefined);
 </script>
 
 <div class="app-shell">
@@ -34,7 +95,21 @@
 			<span class="app-title">KoalaNotes</span>
 		</div>
 		<div class="header-right">
-			<SessionTimer active={sessionActive} elapsed={sessionElapsed} />
+			<select
+				class="role-select"
+				value={$viewingRole}
+				onchange={(e) => viewingRole.set(e.currentTarget.value as Role)}
+				aria-label="View as role"
+			>
+				<option value="gm">GM</option>
+				<option value="player">Player</option>
+				<option value="observer">Observer</option>
+			</select>
+			<SessionTimer
+				active={activeSession !== null}
+				elapsed={elapsedSeconds}
+				sessionName={activeSession?.name ?? ''}
+			/>
 			<button
 				class="toggle-btn"
 				onclick={() => timelineOpen = !timelineOpen}
@@ -52,10 +127,19 @@
 				{@render children()}
 			{/if}
 		</div>
-		<TimelinePanel open={timelineOpen} />
+		<TimelinePanel
+			open={timelineOpen}
+			entries={timelineEntries}
+			active={activeSession !== null}
+			campaignId={activeSession?.campaign_id ?? $page.params.campaignId}
+		/>
 	</div>
 
-	<LiveCommentBar sessionActive={sessionActive} />
+	<LiveCommentBar
+		activeSession={activeSession}
+		elapsedSeconds={elapsedSeconds}
+		currentNoteId={currentNoteId}
+	/>
 </div>
 
 <style>
@@ -104,6 +188,22 @@
 
 	.toggle-btn:hover {
 		background: var(--color-border);
+	}
+
+	.role-select {
+		font-size: 0.75rem;
+		padding: 0.25rem 0.5rem;
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: 4px;
+		color: var(--color-text-muted);
+		font-family: inherit;
+		cursor: pointer;
+		transition: border-color 0.15s;
+	}
+
+	.role-select:hover {
+		border-color: var(--color-primary);
 	}
 
 	.app-body {

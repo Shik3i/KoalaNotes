@@ -1,20 +1,41 @@
 <script lang="ts">
+	import { createEntry } from '$lib/db/timeline';
+	import type { Session } from '$lib/types/models';
+
 	interface Props {
-		sessionActive?: boolean;
+		activeSession: Session | null;
+		elapsedSeconds: number;
+		currentNoteId?: string;
 	}
 
-	let { sessionActive = false }: Props = $props();
+	let { activeSession, elapsedSeconds, currentNoteId }: Props = $props();
 	let comment = $state('');
+	let saving = $state(false);
 
 	function handleSubmit() {
-		// Placeholder: save timeline entry in Phase 2
-		if (comment.trim()) {
-			console.log('[Placeholder] Live comment:', comment);
+		if (!activeSession || !comment.trim() || saving) return;
+		saveEntry();
+	}
+
+	async function saveEntry() {
+		saving = true;
+		try {
+			await createEntry(
+				activeSession!.id,
+				activeSession!.campaign_id,
+				comment,
+				currentNoteId,
+				elapsedSeconds
+			);
 			comment = '';
+		} catch (err) {
+			console.error('[live comment] save failed', err);
+		} finally {
+			saving = false;
 		}
 	}
 
-	function handleKeydown(e: KeyboardEvent) {
+	function onKeydown(e: KeyboardEvent) {
 		if (e.key === 'Enter' && !e.shiftKey) {
 			e.preventDefault();
 			handleSubmit();
@@ -28,18 +49,18 @@
 		id="live-comment-input"
 		type="text"
 		bind:value={comment}
-		onkeydown={handleKeydown}
-		placeholder={sessionActive ? 'Capture a moment... (Enter to save)' : 'Start a session to capture live notes...'}
-		disabled={!sessionActive}
+		onkeydown={onKeydown}
+		placeholder={activeSession ? 'Capture a moment... (Enter to save)' : 'Start a session to capture live notes...'}
+		disabled={!activeSession}
 		aria-label="Live comment input"
 	/>
 	<button
 		class="save-btn"
 		onclick={handleSubmit}
-		disabled={!sessionActive || !comment.trim()}
+		disabled={!activeSession || !comment.trim() || saving}
 		aria-label="Save comment"
 	>
-		Save
+		{saving ? 'Saving...' : 'Save'}
 	</button>
 </div>
 

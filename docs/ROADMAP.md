@@ -1,52 +1,46 @@
 # Roadmap
 
-## Current Status: Foundation Phase
+## Current Status: Phase 3 Complete
 
 - [x] Project structure and documentation
 - [x] Frontend skeleton (Svelte/SvelteKit)
 - [x] Backend skeleton (Go)
 - [x] Docker scaffolding
 - [x] CI/CD workflows
-- [ ] MVP Phase 1: Offline campaign notebook
-- [ ] MVP Phase 2: Live session mode
-- [ ] MVP Phase 3: Roles and visibility
+- [x] MVP Phase 1: Offline campaign notebook
+- [x] MVP Phase 2: Live session mode
+- [x] MVP Phase 3: Roles and visibility
 - [ ] MVP Phase 4: Encrypted sync
 - [ ] Post-MVP features
 
-## Phase 1: Offline Campaign Notebook
+## Phase 1: Offline Campaign Notebook — ✅ Complete
 
-**Target**: Q3-Q4 2026 (estimated)
+- [x] IndexedDB data layer (Dexie.js)
+- [x] Campaign CRUD
+- [x] Note/page CRUD with Markdown
+- [x] Wiki link (`[[page]]`) parsing and rendering
+- [x] Backlink computation
+- [x] Tag management and filtering
+- [x] TTRPG templates (NPC, Location, Quest, Item, Faction, Session)
+- [x] Search (full-text across campaign content)
+- [x] Human-readable export
 
-- [ ] IndexedDB data layer (Dexie.js)
-- [ ] Campaign CRUD
-- [ ] Note/page CRUD with Markdown
-- [ ] Wiki link (`[[page]]`) parsing and rendering
-- [ ] Backlink computation
-- [ ] Tag management and filtering
-- [ ] TTRPG templates (NPC, Location, Quest, Item, Faction, Session)
-- [ ] Search (full-text across campaign content)
-- [ ] Human-readable export
+## Phase 2: Live Session Mode — ✅ Complete
 
-## Phase 2: Live Session Mode
+- [x] Session timer (start/stop)
+- [x] Live comment bar (always visible)
+- [x] Timeline entry storage with clock + session time
+- [x] Session timeline panel
+- [x] Session recap view (compile timeline entries into a recap note)
+- [x] Link entries to context (show which note a comment was made on)
 
-**Target**: TBD
+## Phase 3: Roles and Visibility — ✅ Complete
 
-- [ ] Session timer (start/stop)
-- [ ] Live comment bar (always visible)
-- [ ] Timeline entry storage with clock + session time
-- [ ] Session timeline panel
-- [ ] Session recap view
-- [ ] Link entries to context (campaign, session, current note)
-
-## Phase 3: Roles and Visibility
-
-**Target**: TBD
-
-- [ ] Campaign member roles (GM, Player, Observer)
-- [ ] Note section visibility flags
-- [ ] UI visibility indicators
-- [ ] Role-based filtering in UI
-- [ ] Data model ready for multi-user sync
+- [x] Campaign member roles (GM, Player, Observer)
+- [x] Note section visibility flags
+- [x] UI visibility indicators
+- [x] Role-based filtering in UI
+- [x] Data model ready for multi-user sync
 
 ## Phase 4: Encrypted Sync
 

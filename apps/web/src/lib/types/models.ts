@@ -98,6 +98,7 @@ export interface Tag {
 }
 
 export interface WikiLink {
+	id: string;
 	source_note_id: string;
 	target_note_id: string;
 	context: string;

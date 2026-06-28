@@ -60,7 +60,7 @@ and wiki linking.
 
 ---
 
-## Phase 3: Roles and Visibility
+## Phase 3: Roles and Visibility — ✅ Complete
 
 **Goal**: Introduce role-based visibility for campaign content.
 
