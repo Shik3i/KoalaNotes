@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -41,8 +40,8 @@ func main() {
 	}
 	jwtSecret := []byte(jwtSecretStr)
 
-	// Ensure data directory exists
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
+	// Ensure data directory exists (owner-only access)
+	if err := os.MkdirAll(dataDir, 0700); err != nil {
 		slog.Error("failed to create data directory", "error", err)
 		os.Exit(1)
 	}
@@ -65,7 +64,7 @@ func main() {
 	mux := http.NewServeMux()
 
 	// Health and version endpoints
-	mux.HandleFunc("GET /healthz", handler.Healthz)
+	mux.HandleFunc("GET /healthz", handler.NewHealthzHandler(database))
 	mux.HandleFunc("GET /api/version", handler.Version(version))
 
 	// Auth endpoints (no JWT required)
@@ -102,9 +101,13 @@ func main() {
 		if err := srv.Shutdown(ctx); err != nil {
 			slog.Error("server shutdown error", "error", err)
 		}
+
+		if err := database.Close(); err != nil {
+			slog.Error("database close error", "error", err)
+		}
 	}()
 
-	slog.Info(fmt.Sprintf("%s server listening at %s", serverName, addr))
+	slog.Info("server listening", "addr", addr)
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		slog.Error("server error", "error", err)
 		os.Exit(1)
