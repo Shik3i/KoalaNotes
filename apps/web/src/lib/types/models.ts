@@ -32,6 +32,7 @@ export interface Note {
 	id: string;
 	campaign_id: string;
 	title: string;
+	title_lower: string;  // lowercase copy for indexed case-insensitive wiki lookup
 	content: string;
 	template_type?: TemplateType;
 	tags: string[];

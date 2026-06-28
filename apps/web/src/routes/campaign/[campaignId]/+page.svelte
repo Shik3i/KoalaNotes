@@ -25,7 +25,11 @@
 	let notes = $state<Note[]>([]);
 	$effect(() => {
 		const observable = liveQuery(() =>
-			db.notes.where('campaign_id').equals(campaignId).sortBy('title')
+			db.notes
+				.where('[campaign_id+title]')
+				.between([campaignId, ''], [campaignId, '\uffff'])
+				.limit(500)
+				.toArray()
 		);
 		const sub = observable.subscribe({
 			next: (result) => { notes = result; },

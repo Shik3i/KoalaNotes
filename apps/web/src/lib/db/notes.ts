@@ -10,11 +10,13 @@ export async function createNote(
 	template_type?: TemplateType,
 	tags: string[] = []
 ): Promise<string> {
+	const trimmed = title.trim() || 'Untitled';
 	const now = new Date().toISOString();
 	const note: Note = {
 		id: uuid(),
 		campaign_id,
-		title: title.trim() || 'Untitled',
+		title: trimmed,
+		title_lower: trimmed.toLowerCase(),
 		content,
 		template_type,
 		tags,
@@ -38,7 +40,11 @@ export async function updateNote(
 	if (!old) return;
 
 	await db.transaction('rw', [db.notes, db.wiki_links], async () => {
-		await db.notes.update(id, { ...changes, updated_at: new Date().toISOString() });
+		const payload: Record<string, unknown> = { ...changes, updated_at: new Date().toISOString() };
+		if (changes.title !== undefined) {
+			payload.title_lower = changes.title.trim().toLowerCase();
+		}
+		await db.notes.update(id, payload as any);
 	});
 
 	// Re-resolve wiki links if content changed
@@ -58,9 +64,12 @@ export async function getNote(id: string): Promise<Note | undefined> {
 	return db.notes.get(id);
 }
 
-/** Get all notes for a campaign, sorted by title. */
+/** Get all notes for a campaign, sorted by title using compound index. */
 export async function getNotesByCampaign(campaign_id: string): Promise<Note[]> {
-	return db.notes.where('campaign_id').equals(campaign_id).sortBy('title');
+	return db.notes
+		.where('[campaign_id+title]')
+		.between([campaign_id, ''], [campaign_id, '\uffff'])
+		.toArray();
 }
 
 /** Delete a note, its wiki links, and orphaned timeline entries. */

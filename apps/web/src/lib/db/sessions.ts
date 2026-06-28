@@ -13,10 +13,10 @@ export function observeActiveSession() {
 export function observeSessionsByCampaign(campaignId: string) {
 	return liveQuery(() =>
 		db.sessions
-			.where('campaign_id')
-			.equals(campaignId)
+			.where('[campaign_id+started_at]')
+			.between([campaignId, ''], [campaignId, '\uffff'])
 			.reverse()
-			.sortBy('started_at')
+			.toArray()
 	);
 }
 
@@ -91,14 +91,14 @@ export async function createSessionRecap(sessionId: string): Promise<string> {
 	if (!session) throw new Error('Session not found');
 
 	const entries: TimelineEntry[] = await db.timeline_entries
-		.where('session_id')
-		.equals(sessionId)
-		.sortBy('clock_time');
+		.where('[session_id+clock_time]')
+		.between([sessionId, ''], [sessionId, '\uffff'])
+		.toArray();
 
 	// Resolve note titles for wiki link formatting
 	const noteIds = [...new Set(entries.map(e => e.note_id).filter(Boolean) as string[])];
 	const notes: Note[] = noteIds.length > 0
-		? await db.notes.filter(n => noteIds.includes(n.id)).toArray()
+		? await db.notes.where('id').anyOf(noteIds).toArray()
 		: [];
 	const titleMap = new Map(notes.map(n => [n.id, n.title]));
 
@@ -128,10 +128,12 @@ export async function createSessionRecap(sessionId: string): Promise<string> {
 	const content = lines.join('\n');
 	const now = new Date().toISOString();
 
+	const recapTitle = `Recap: ${session.name}`;
 	const recapNote: Note = {
 		id: uuid(),
 		campaign_id: session.campaign_id,
-		title: `Recap: ${session.name}`,
+		title: recapTitle,
+		title_lower: recapTitle.toLowerCase(),
 		content,
 		template_type: 'session_recap',
 		tags: ['recap'],

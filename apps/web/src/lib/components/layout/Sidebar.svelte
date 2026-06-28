@@ -40,9 +40,10 @@
 		}
 		const observable = liveQuery(() =>
 			db.notes
-				.where('campaign_id')
-				.equals(activeCampaignId!)
-				.sortBy('title')
+				.where('[campaign_id+title]')
+				.between([activeCampaignId!, ''], [activeCampaignId!, '\uffff'])
+				.limit(100)
+				.toArray()
 		);
 		const sub = observable.subscribe({
 			next: (result) => { activeNotes = result; },

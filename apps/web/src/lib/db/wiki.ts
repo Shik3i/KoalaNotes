@@ -34,13 +34,12 @@ export async function resolveWikiLinks(
 		return;
 	}
 
-	// Resolve each target title to a note ID
+	// Resolve each target title to a note ID using compound index for O(log n) lookup
 	const linkData: Array<{ title: string; noteId: string | null }> = [];
 	for (const targetTitle of targets) {
 		const targetNote = await db.notes
-			.where('campaign_id')
-			.equals(campaignId)
-			.filter((n) => n.title.toLowerCase() === targetTitle.toLowerCase())
+			.where('[campaign_id+title_lower]')
+			.equals([campaignId, targetTitle.toLowerCase()])
 			.first();
 		linkData.push({ title: targetTitle, noteId: targetNote?.id ?? null });
 	}
@@ -98,7 +97,8 @@ export function observeOutgoingLinks(noteId: string) {
  */
 export async function getNoteTitleMap(noteIds: string[]): Promise<Map<string, string>> {
 	const notes = await db.notes
-		.filter(n => noteIds.includes(n.id))
+		.where('id')
+		.anyOf(noteIds)
 		.toArray();
 	const map = new Map<string, string>();
 	for (const n of notes) {

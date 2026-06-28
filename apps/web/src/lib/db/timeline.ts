@@ -6,9 +6,9 @@ import type { TimelineEntry } from '$lib/types/models';
 export function observeSessionEntries(sessionId: string) {
 	return liveQuery(() =>
 		db.timeline_entries
-			.where('session_id')
-			.equals(sessionId)
-			.sortBy('clock_time')
+			.where('[session_id+clock_time]')
+			.between([sessionId, ''], [sessionId, '\uffff'])
+			.toArray()
 	);
 }
 
@@ -16,10 +16,10 @@ export function observeSessionEntries(sessionId: string) {
 export function observeCampaignEntries(campaignId: string) {
 	return liveQuery(() =>
 		db.timeline_entries
-			.where('campaign_id')
-			.equals(campaignId)
+			.where('[campaign_id+clock_time]')
+			.between([campaignId, ''], [campaignId, '\uffff'])
 			.reverse()
-			.sortBy('clock_time')
+			.toArray()
 	);
 }
 

@@ -47,6 +47,18 @@ export class KoalaDB extends Dexie {
 			campaign_members: 'id, campaign_id, user_id, role',
 			crypto_keys: 'id, campaign_id'
 		});
+
+		this.version(3).stores({
+			campaigns: 'id, name, created_at, updated_at, archived',
+			notes: 'id, campaign_id, title, template_type, created_at, updated_at, *tags, pinned, [campaign_id+title], [campaign_id+title_lower]',
+			sessions: 'id, campaign_id, status, started_at, session_number, [campaign_id+started_at]',
+			timeline_entries: 'id, campaign_id, session_id, note_id, clock_time, session_elapsed, [session_id+clock_time], [campaign_id+clock_time]',
+			templates: 'id, type',
+			tags: 'id, name, campaign_id',
+			wiki_links: '[source_note_id+target_note_id], source_note_id, target_note_id, created_at',
+			campaign_members: 'id, campaign_id, user_id, role',
+			crypto_keys: 'id, campaign_id'
+		});
 	}
 }
 
