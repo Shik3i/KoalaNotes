@@ -9,7 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/shik3i/koalanotes/internal/db"
 	"github.com/shik3i/koalanotes/internal/middleware"
 )
@@ -386,5 +388,210 @@ func TestPull_Unauthenticated(t *testing.T) {
 
 	if rec.Code != http.StatusUnauthorized {
 		t.Errorf("expected status 401, got %d", rec.Code)
+	}
+}
+
+// ---- Error-path Tests ----
+
+func TestRegister_InvalidEmail(t *testing.T) {
+	database := setupTestDB(t)
+	tests := []struct {
+		name     string
+		email    string
+		password string
+	}{
+		{"missing @", "invalid", "password123"},
+		{"too long email", strings.Repeat("a", 255) + "@b.com", "password123"},
+		{"short password", "test@example.com", "short"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := registerAccount(t, database, tt.email, tt.password)
+			if rec.Code != http.StatusBadRequest {
+				t.Errorf("expected status 400, got %d", rec.Code)
+			}
+			var errResp ErrorResponse
+			if err := json.NewDecoder(rec.Body).Decode(&errResp); err != nil {
+				t.Fatalf("failed to decode error: %v", err)
+			}
+			if errResp.Error == "" {
+				t.Error("expected non-empty error message")
+			}
+		})
+	}
+}
+
+func TestRegister_MalformedJSON(t *testing.T) {
+	database := setupTestDB(t)
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/register",
+		strings.NewReader(`{not json`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	NewRegisterHandler(database, testJWTSecret)(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected status 400, got %d", rec.Code)
+	}
+}
+
+func TestLogin_MalformedJSON(t *testing.T) {
+	database := setupTestDB(t)
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/login",
+		strings.NewReader(`{not json`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	NewLoginHandler(database, testJWTSecret)(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected status 400, got %d", rec.Code)
+	}
+}
+
+func TestPush_MalformedJSON(t *testing.T) {
+	database := setupTestDB(t)
+	// Need a valid token so middleware passes and handler reads the body
+	registerAccount(t, database, "malformed@example.com", "password123")
+	loginRec := loginAccount(t, database, "malformed@example.com", "password123")
+	var loginResp AuthResponse
+	if err := json.NewDecoder(loginRec.Body).Decode(&loginResp); err != nil {
+		t.Fatalf("failed to decode login: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/sync/push",
+		strings.NewReader(`{not json`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+loginResp.Token)
+	rec := httptest.NewRecorder()
+	authMw := middleware.Auth(testJWTSecret)
+	authMw(http.HandlerFunc(NewSyncPushHandler(database))).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected status 400 for malformed json, got %d", rec.Code)
+	}
+}
+
+func TestPush_InvalidToken(t *testing.T) {
+	database := setupTestDB(t)
+	req := httptest.NewRequest(http.MethodPost, "/api/sync/push",
+		strings.NewReader(`{"blobs":[]}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer invalid-token")
+	rec := httptest.NewRecorder()
+	authMw := middleware.Auth(testJWTSecret)
+	authMw(http.HandlerFunc(NewSyncPushHandler(database))).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("expected status 401 for invalid token, got %d", rec.Code)
+	}
+}
+
+func TestPush_ExpiredToken(t *testing.T) {
+	database := setupTestDB(t)
+	// Generate a token that expired 1 hour ago
+	claims := jwt.MapClaims{
+		"sub":   "test-account",
+		"email": "test@example.com",
+		"iat":   time.Now().Add(-2 * time.Hour).Unix(),
+		"exp":   time.Now().Add(-1 * time.Hour).Unix(),
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenStr, err := token.SignedString(testJWTSecret)
+	if err != nil {
+		t.Fatalf("failed to sign expired token: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/sync/push",
+		strings.NewReader(`{"blobs":[]}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+tokenStr)
+	rec := httptest.NewRecorder()
+	authMw := middleware.Auth(testJWTSecret)
+	authMw(http.HandlerFunc(NewSyncPushHandler(database))).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("expected status 401 for expired token, got %d", rec.Code)
+	}
+}
+
+func TestPull_InvalidSince(t *testing.T) {
+	database := setupTestDB(t)
+	registerAccount(t, database, "since@example.com", "password123")
+	loginRec := loginAccount(t, database, "since@example.com", "password123")
+	var loginResp AuthResponse
+	if err := json.NewDecoder(loginRec.Body).Decode(&loginResp); err != nil {
+		t.Fatalf("failed to decode login: %v", err)
+	}
+
+	// Pull with malformed since parameter
+	rec := pullBlobs(t, database, loginResp.Token, "not-a-date")
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected status 400 for invalid since, got %d", rec.Code)
+	}
+
+	// Pull with valid since should work
+	rec2 := pullBlobs(t, database, loginResp.Token, "2025-01-01T00:00:00Z")
+	if rec2.Code != http.StatusOK {
+		t.Errorf("expected status 200 for valid since, got %d", rec2.Code)
+	}
+}
+
+func TestPush_EmptyBlobs(t *testing.T) {
+	database := setupTestDB(t)
+	registerAccount(t, database, "empty@example.com", "password123")
+	loginRec := loginAccount(t, database, "empty@example.com", "password123")
+	var loginResp AuthResponse
+	if err := json.NewDecoder(loginRec.Body).Decode(&loginResp); err != nil {
+		t.Fatalf("failed to decode login: %v", err)
+	}
+
+	// Push with empty blobs array
+	var buf bytes.Buffer
+	json.NewEncoder(&buf).Encode(PushRequest{Blobs: []db.BlobRecord{}})
+	req := httptest.NewRequest(http.MethodPost, "/api/sync/push", &buf)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+loginResp.Token)
+	rec := httptest.NewRecorder()
+	authMw := middleware.Auth(testJWTSecret)
+	authMw(http.HandlerFunc(NewSyncPushHandler(database))).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected status 400 for empty blobs, got %d", rec.Code)
+	}
+}
+
+func TestPush_MissingBlobFields(t *testing.T) {
+	database := setupTestDB(t)
+	registerAccount(t, database, "fields@example.com", "password123")
+	loginRec := loginAccount(t, database, "fields@example.com", "password123")
+	var loginResp AuthResponse
+	if err := json.NewDecoder(loginRec.Body).Decode(&loginResp); err != nil {
+		t.Fatalf("failed to decode login: %v", err)
+	}
+
+	tests := []struct {
+		name  string
+		blobs []db.BlobRecord
+	}{
+		{"missing id", []db.BlobRecord{{CampaignKeyID: "k", EncryptedPayload: "{}"}}},
+		{"missing campaign_key_id", []db.BlobRecord{{ID: "b", EncryptedPayload: "{}"}}},
+		{"missing payload", []db.BlobRecord{{ID: "b", CampaignKeyID: "k"}}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			json.NewEncoder(&buf).Encode(PushRequest{Blobs: tt.blobs})
+			req := httptest.NewRequest(http.MethodPost, "/api/sync/push", &buf)
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Authorization", "Bearer "+loginResp.Token)
+			rec := httptest.NewRecorder()
+			authMw := middleware.Auth(testJWTSecret)
+			authMw(http.HandlerFunc(NewSyncPushHandler(database))).ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusBadRequest {
+				t.Errorf("expected status 400, got %d", rec.Code)
+			}
+		})
 	}
 }
