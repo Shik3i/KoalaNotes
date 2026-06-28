@@ -124,12 +124,25 @@ func (d *DB) UpsertBlobs(ctx context.Context, blobs []BlobRecord) error {
 		}
 	}()
 
+	// Reject cross-account blob ID conflicts
+	for _, b := range blobs {
+		var existingAccount string
+		err := tx.QueryRowContext(ctx, `SELECT account_id FROM blob_records WHERE id = ?`, b.ID).Scan(&existingAccount)
+		if err == nil && existingAccount != b.AccountID {
+			return fmt.Errorf("blob %s belongs to a different account", b.ID)
+		}
+		if err != nil && err != sql.ErrNoRows {
+			return err
+		}
+	}
+
 	stmt, err := tx.PrepareContext(ctx,
 		`INSERT INTO blob_records (id, account_id, campaign_key_id, encrypted_payload, vector_clock, created_at)
 		 VALUES (?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(id) DO UPDATE SET
 			encrypted_payload = excluded.encrypted_payload,
-			vector_clock = excluded.vector_clock`,
+			vector_clock = excluded.vector_clock,
+			created_at = excluded.created_at`,
 	)
 	if err != nil {
 		return err
@@ -137,6 +150,9 @@ func (d *DB) UpsertBlobs(ctx context.Context, blobs []BlobRecord) error {
 	defer stmt.Close()
 
 	for _, b := range blobs {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		now := time.Now().UTC().Format(time.RFC3339)
 		if _, err := stmt.ExecContext(ctx, b.ID, b.AccountID, b.CampaignKeyID, b.EncryptedPayload, b.VectorClock, now); err != nil {
 			return err

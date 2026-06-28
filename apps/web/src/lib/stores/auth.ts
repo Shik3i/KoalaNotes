@@ -1,4 +1,4 @@
-import { writable } from 'svelte/store';
+import { writable, get } from 'svelte/store';
 
 export interface AuthState {
 	token: string | null;
@@ -138,7 +138,7 @@ let activityHandler: (() => void) | undefined;
 
 function resetIdleTimer() {
 	if (idleTimer) { clearTimeout(idleTimer); idleTimer = undefined; }
-	const current = getStored();
+	const current = get(auth);
 	if (!current.token || current.locked) return;
 	idleTimer = setTimeout(() => {
 		console.warn('[auth] idle timeout — locking key');

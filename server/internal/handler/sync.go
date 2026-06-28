@@ -98,7 +98,7 @@ func NewSyncPullHandler(database *db.DB) http.HandlerFunc {
 
 		blobs, err := database.GetBlobs(r.Context(), accountID, since)
 		if err != nil {
-			writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+			writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "invalid request"})
 			return
 		}
 

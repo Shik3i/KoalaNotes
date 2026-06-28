@@ -5,7 +5,10 @@
 	import { observeSessionEntries } from '$lib/db/timeline';
 	import { viewingRole } from '$lib/stores/role';
 	import { auth } from '$lib/stores/auth';
+	import { theme, toggleTheme } from '$lib/stores/theme';
 	import { page } from '$app/stores';
+	import { registerShortcuts } from '$lib/utils/keyboard';
+	import { goto } from '$app/navigation';
 	import Sidebar from './Sidebar.svelte';
 	import TimelinePanel from './TimelinePanel.svelte';
 	import SessionTimer from './SessionTimer.svelte';
@@ -93,6 +96,30 @@
 
 	// Sync status: basic indicator derived from auth token
 	let isLoggedIn = $derived(!!$auth.token);
+
+	// Offline indicator
+	let online = $state(typeof navigator === 'undefined' ? true : navigator.onLine);
+	$effect(() => {
+		if (typeof window === 'undefined') return;
+		const onLine = () => { online = true; };
+		const offLine = () => { online = false; };
+		window.addEventListener('online', onLine);
+		window.addEventListener('offline', offLine);
+		return () => {
+			window.removeEventListener('online', onLine);
+			window.removeEventListener('offline', offLine);
+		};
+	});
+
+	// Keyboard shortcuts
+	$effect(() => {
+		const unsub = registerShortcuts([
+			{ key: 'n', ctrl: true, handler: () => goto('/'), description: 'New note' },
+			{ key: 'n', meta: true, handler: () => goto('/'), description: 'New note' },
+			{ key: ',', ctrl: true, shift: true, handler: toggleTheme, description: 'Toggle theme' },
+		]);
+		return unsub;
+	});
 </script>
 
 <div class="app-shell">
@@ -123,12 +150,23 @@
 				elapsed={elapsedSeconds}
 				sessionName={activeSession?.name ?? ''}
 			/>
-			<a href="/settings" class="settings-link" title="Settings" aria-label="Settings">
-				⚙
-			</a>
 			{#if $auth.token}
 				<span class="sync-indicator sync-success" title="Connected (sync available)">✓</span>
 			{/if}
+			{#if !online}
+				<span class="offline-indicator" title="No internet connection">📡</span>
+			{/if}
+			<button
+				class="toggle-btn theme-btn"
+				onclick={toggleTheme}
+				aria-label="Toggle theme"
+				title={$theme === 'light' ? 'Switch to dark' : 'Switch to light'}
+			>
+				{$theme === 'light' ? '🌙' : '☀️'}
+			</button>
+			<a href="/settings" class="settings-link" title="Settings" aria-label="Settings">
+				⚙
+			</a>
 			<button
 				class="toggle-btn"
 				onclick={() => timelineOpen = !timelineOpen}
@@ -141,7 +179,7 @@
 
 	<div class="app-body">
 		<Sidebar collapsed={!sidebarOpen} />
-		<div class="main-content">
+		<div id="main-content" class="main-content">
 			{#if children}
 				{@render children()}
 			{/if}
@@ -242,7 +280,13 @@
 		line-height: 1;
 	}
 
-	.sync-success { color: #38a169; }
+	.sync-success { color: var(--color-success); }
+
+	.offline-indicator {
+		font-size: 0.875rem;
+		line-height: 1;
+		opacity: 0.8;
+	}
 
 	.app-body {
 		flex: 1;

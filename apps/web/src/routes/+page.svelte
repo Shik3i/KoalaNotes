@@ -4,14 +4,18 @@
 	import type { Campaign } from '$lib/types/models';
 
 	let campaigns = $state<Campaign[]>([]);
+	let campaignsLoading = $state(true);
+	let campaignsError = $state('');
 
 	$effect(() => {
+		campaignsLoading = true;
+		campaignsError = '';
 		const observable = liveQuery(() =>
 			db.campaigns.where('archived').equals(0).sortBy('name')
 		);
 		const sub = observable.subscribe({
-			next: (result) => { campaigns = result; },
-			error: (err) => console.error('[campaigns]', err)
+			next: (result) => { campaigns = result; campaignsLoading = false; },
+			error: (err) => { console.error('[campaigns]', err); campaignsLoading = false; campaignsError = String(err); }
 		});
 		return () => sub.unsubscribe();
 	});
@@ -34,7 +38,15 @@
 		<p class="subtitle">Privacy-first, local-first TTRPG campaign notebook</p>
 	</div>
 
-	{#if campaigns.length === 0}
+	{#if campaignsLoading}
+		<section class="empty-state">
+			<p>Loading campaigns...</p>
+		</section>
+	{:else if campaignsError}
+		<section class="empty-state error">
+			<p role="alert">Failed to load campaigns.</p>
+		</section>
+	{:else if campaigns.length === 0}
 		<section class="empty-state">
 			<p>No campaigns yet.</p>
 			<p class="hint">Create one from the sidebar to get started.</p>

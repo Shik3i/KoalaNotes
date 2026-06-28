@@ -48,18 +48,28 @@
 		return () => sub.unsubscribe();
 	});
 
+	// Full-text search over notes
+	let searchQuery = $state('');
+	let filteredNotes = $derived.by(() => {
+		if (!searchQuery.trim()) return activeNotes;
+		const q = searchQuery.toLowerCase();
+		return activeNotes.filter(
+			(n) => n.title.toLowerCase().includes(q) || n.content.toLowerCase().includes(q)
+		);
+	});
+
 	// Virtual scrolling for note list
 	const ITEM_HEIGHT = 32;
 	const OVERSCAN = 10;
 	let noteListScrollTop = $state(0);
 	let noteListClientHeight = $state(300);
 
-	let totalHeight = $derived(activeNotes.length * ITEM_HEIGHT);
+	let totalHeight = $derived(filteredNotes.length * ITEM_HEIGHT);
 	let startIdx = $derived(Math.max(0, Math.floor(noteListScrollTop / ITEM_HEIGHT) - OVERSCAN));
-	let endIdx = $derived(Math.min(activeNotes.length, Math.ceil((noteListScrollTop + noteListClientHeight) / ITEM_HEIGHT) + OVERSCAN));
-	let visibleNotes = $derived(activeNotes.slice(startIdx, endIdx));
+	let endIdx = $derived(Math.min(filteredNotes.length, Math.ceil((noteListScrollTop + noteListClientHeight) / ITEM_HEIGHT) + OVERSCAN));
+	let visibleNotes = $derived(filteredNotes.slice(startIdx, endIdx));
 	let topPad = $derived(startIdx * ITEM_HEIGHT);
-	let botPad = $derived((activeNotes.length - endIdx) * ITEM_HEIGHT);
+	let botPad = $derived((filteredNotes.length - endIdx) * ITEM_HEIGHT);
 
 	function handleNoteScroll(e: Event) {
 		const el = e.currentTarget as HTMLElement;
@@ -128,27 +138,39 @@
 							<span class="campaign-name">{c.name}</span>
 						</a>
 
-						{#if activeCampaignId === c.id && activeNotes.length > 0}
-							<ul class="note-list" role="group" aria-label="Notes in {c.name}"
-								onscroll={handleNoteScroll}
-								bind:clientHeight={noteListClientHeight}
-								style="max-height: min(40vh, 400px); overflow-y: auto;"
-							>
-								<li style="height: {topPad}px; pointer-events: none;" aria-hidden="true"></li>
-								{#each visibleNotes as n (n.id)}
-									<li role="treeitem" aria-selected={$page.params.noteId === n.id}>
-										<a
-											href="/campaign/{c.id}/notes/{n.id}"
-											class="note-link"
-											class:active={$page.params.noteId === n.id}
-										>
-											<span class="note-icon" aria-hidden="true">📝</span>
-											<span class="note-title">{n.title || 'Untitled'}</span>
-										</a>
-									</li>
-								{/each}
-								<li style="height: {botPad}px; pointer-events: none;" aria-hidden="true"></li>
-							</ul>
+						{#if activeCampaignId === c.id}
+							<div class="note-search">
+								<input
+									type="search"
+									bind:value={searchQuery}
+									placeholder="Search notes..."
+									aria-label="Search notes in {c.name}"
+								/>
+							</div>
+							{#if filteredNotes.length > 0}
+								<ul class="note-list" role="group" aria-label="Notes in {c.name}"
+									onscroll={handleNoteScroll}
+									bind:clientHeight={noteListClientHeight}
+									style="max-height: min(40vh, 400px); overflow-y: auto;"
+								>
+									<li style="height: {topPad}px; pointer-events: none;" aria-hidden="true"></li>
+									{#each visibleNotes as n (n.id)}
+										<li role="treeitem" aria-selected={$page.params.noteId === n.id}>
+											<a
+												href="/campaign/{c.id}/notes/{n.id}"
+												class="note-link"
+												class:active={$page.params.noteId === n.id}
+											>
+												<span class="note-icon" aria-hidden="true">📝</span>
+												<span class="note-title">{n.title || 'Untitled'}</span>
+											</a>
+										</li>
+									{/each}
+									<li style="height: {botPad}px; pointer-events: none;" aria-hidden="true"></li>
+								</ul>
+							{:else if activeNotes.length > 0}
+								<p class="search-empty">No notes match "{searchQuery}"</p>
+							{/if}
 						{/if}
 					</li>
 				{/each}
@@ -204,10 +226,10 @@
 		background: none;
 		border: 1px solid var(--color-border);
 		color: var(--color-text-muted);
-		width: 24px;
-		height: 24px;
-		border-radius: 4px;
-		font-size: 1rem;
+		width: 32px;
+		height: 32px;
+		border-radius: 6px;
+		font-size: 1.125rem;
 		line-height: 1;
 		display: flex;
 		align-items: center;
@@ -372,6 +394,33 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+
+	.note-search {
+		padding: 0.25rem 0.5rem;
+	}
+
+	.note-search input {
+		width: 100%;
+		padding: 0.375rem 0.5rem;
+		font-size: 0.75rem;
+		background: var(--color-bg);
+		border: 1px solid var(--color-border);
+		border-radius: 4px;
+		color: var(--color-text);
+		font-family: inherit;
+		outline: none;
+	}
+
+	.note-search input:focus {
+		border-color: var(--color-primary);
+	}
+
+	.search-empty {
+		padding: 0.5rem 0.75rem;
+		font-size: 0.75rem;
+		color: var(--color-text-muted);
+		text-align: center;
 	}
 
 	.sidebar-footer {

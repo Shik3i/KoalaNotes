@@ -14,6 +14,7 @@
 	let noteId = $derived($page.params.noteId ?? '');
 
 	let note = $state<Note | undefined>();
+	let noteLoading = $state(true);
 	let title = $state('');
 	let content = $state('');
 	let tags = $state<string[]>([]);
@@ -29,10 +30,12 @@
 	});
 
 	$effect(() => {
+		noteLoading = true;
 		const observable = liveQuery(() => getNote(noteId));
 		const sub = observable.subscribe({
 			next: (result) => {
 				note = result;
+				noteLoading = false;
 				if (result) {
 					title = result.title;
 					content = result.content;
@@ -40,7 +43,7 @@
 					sections = result.sections ?? [];
 				}
 			},
-			error: (err) => console.error('[note]', err)
+			error: (err) => { console.error('[note]', err); noteLoading = false; }
 		});
 		return () => sub.unsubscribe();
 	});
@@ -207,10 +210,10 @@
 		}
 
 		let html = filtered
-			.replace(/&/g, '&amp;')
 			.replace(/</g, '&lt;')
 			.replace(/>/g, '&gt;')
 			.replace(/"/g, '&quot;')
+			.replace(/&/g, '&amp;')
 			.replace(/^### (.+)$/gm, '<h3>$1</h3>')
 			.replace(/^## (.+)$/gm, '<h2>$1</h2>')
 			.replace(/^# (.+)$/gm, '<h1>$1</h1>')
@@ -220,14 +223,22 @@
 			.replace(/~~(.+?)~~/g, '<del>$1</del>')
 			.replace(/\[([^\]]+)\]\(([^)]+)\)/g,
 				(_m, text, url) => {
-					const safe = url.startsWith('javascript:') ? '#' : url;
+					let safe = '#';
+					try {
+						const parsed = new URL(url, window.location.href);
+						if (parsed.protocol === 'http:' || parsed.protocol === 'https:' || parsed.protocol === 'mailto:') {
+							safe = url;
+						}
+					} catch { /* invalid URL — use # */ }
 					return '<a href="' + safe + '" target="_blank" rel="noopener">' + text + '</a>';
 				})
 			// Wiki links with resolved URLs
 			.replace(/\[\[([^\]]+)\]\]/g, (_m, title) => {
-				const href = linkHrefs.get(title) ?? '#';
+				// Unescape HTML entities in captured title to match raw DB values in linkHrefs
+				const raw = title.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+				const href = linkHrefs.get(raw) ?? '#';
 				const cls = href === '#' ? 'wiki-link unresolved' : 'wiki-link';
-				return '<a href="' + href + '" class="' + cls + '" data-wiki="' + title + '">' + title + '</a>';
+				return '<a href="' + href + '" class="' + cls + '" data-wiki="' + raw + '">' + title + '</a>';
 			})
 			.replace(/^---$/gm, '<hr />')
 			.replace(/^- (.+)$/gm, '<li>$1</li>')
@@ -393,6 +404,10 @@
 				</ul>
 			</section>
 		{/if}
+	{:else if noteLoading}
+		<div class="loading">
+			<p>Loading note...</p>
+		</div>
 	{:else}
 		<div class="loading">
 			<p>Note not found.</p>

@@ -76,6 +76,22 @@ func main() {
 	mux.Handle("POST /api/sync/push", authMw(http.HandlerFunc(handler.NewSyncPushHandler(database))))
 	mux.Handle("GET /api/sync/pull", authMw(http.HandlerFunc(handler.NewSyncPullHandler(database))))
 
+	// Static file server for SvelteKit SPA
+	staticDir := envOrDefault("KOALA_STATIC_DIR", "./static")
+	fileServer := http.FileServer(http.Dir(staticDir))
+	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, filepath.Join(staticDir, "index.html"))
+	})
+	mux.Handle("GET /", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := filepath.Join(staticDir, r.URL.Path)
+		if info, err := os.Stat(path); err == nil && !info.IsDir() {
+			fileServer.ServeHTTP(w, r)
+		} else {
+			// SPA fallback: serve index.html for all non-file routes
+			http.ServeFile(w, r, filepath.Join(staticDir, "index.html"))
+		}
+	}))
+
 	// Wrap with middleware
 	wrapped := middleware.Logging(mux)
 	wrapped = middleware.CORS(wrapped)
@@ -100,10 +116,6 @@ func main() {
 
 		if err := srv.Shutdown(ctx); err != nil {
 			slog.Error("server shutdown error", "error", err)
-		}
-
-		if err := database.Close(); err != nil {
-			slog.Error("database close error", "error", err)
 		}
 	}()
 

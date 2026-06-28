@@ -5,7 +5,7 @@
 
 	// Register service worker for offline support
 	if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
-		navigator.serviceWorker.register('/service-worker.js');
+		navigator.serviceWorker.register('/service-worker.js').catch((err) => console.error('[SW] registration failed', err));
 	}
 
 	let { children } = $props();
@@ -37,6 +37,7 @@
 
 {@html '<script type="application/ld+json">' + JSON.stringify({"@context":"https://schema.org","@type":"WebApplication","name":"KoalaNotes","url":"https://koalanotes.app/","description":"Privacy-first, local-first TTRPG campaign notebook","applicationCategory":"Productivity","operatingSystem":"Web"}) + '</script>'}
 
+<a href="#main-content" class="skip-link">Skip to main content</a>
 <AppShell>
 	{@render children()}
 </AppShell>

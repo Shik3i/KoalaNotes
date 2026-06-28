@@ -469,7 +469,7 @@
 	}
 
 	.error {
-		color: var(--color-danger, #e53e3e);
+		color: var(--color-danger);
 		font-size: 0.8125rem;
 		margin: 0.5rem 0;
 	}
@@ -493,6 +493,6 @@
 
 	.sync-idle { color: var(--color-text-muted); }
 	.sync-syncing { color: var(--color-primary); }
-	.sync-success { color: #38a169; }
-	.sync-error { color: var(--color-danger, #e53e3e); }
+	.sync-success { color: var(--color-success); }
+	.sync-error { color: var(--color-danger); }
 </style>

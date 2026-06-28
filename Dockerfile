@@ -1,6 +1,6 @@
 # Multi-stage build for KoalaNotes
 # Stage 1: Build frontend
-FROM node:22-alpine AS frontend-builder
+FROM node:lts-alpine AS frontend-builder
 WORKDIR /src/apps/web
 COPY apps/web/package*.json ./
 RUN npm ci
@@ -8,7 +8,7 @@ COPY apps/web/ ./
 RUN npm run build
 
 # Stage 2: Build backend
-FROM golang:1.24-alpine AS backend-builder
+FROM golang:alpine AS backend-builder
 WORKDIR /src
 COPY server/go.mod server/go.sum ./
 RUN go mod download

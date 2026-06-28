@@ -60,6 +60,7 @@ type ErrorResponse struct {
 // NewRegisterHandler returns a handler for POST /api/auth/register.
 func NewRegisterHandler(database *db.DB, jwtSecret []byte) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 		var req RegisterRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "invalid request body"})
@@ -107,6 +108,7 @@ func NewRegisterHandler(database *db.DB, jwtSecret []byte) http.HandlerFunc {
 // NewLoginHandler returns a handler for POST /api/auth/login.
 func NewLoginHandler(database *db.DB, jwtSecret []byte) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 		var req LoginRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "invalid request body"})

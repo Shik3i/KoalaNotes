@@ -1,5 +1,6 @@
 /* KoalaNotes Design Tokens */
-:root {
+:root,
+.dark {
 	--color-bg: #1a1a2e;
 	--color-surface: #16213e;
 	--color-surface-alt: #0f3460;
@@ -24,6 +25,21 @@
 	font-family: var(--font-sans);
 	color: var(--color-text);
 	background-color: var(--color-bg);
+}
+
+/* Light theme overrides */
+.light {
+	--color-bg: #f8f9fa;
+	--color-surface: #ffffff;
+	--color-surface-alt: #e9ecef;
+	--color-primary: #d6336c;
+	--color-primary-hover: #c2255c;
+	--color-text: #212529;
+	--color-text-muted: #495057;
+	--color-border: #dee2e6;
+	--color-success: #2b8a3e;
+	--color-warning: #e67700;
+	--color-danger: #c92a2a;
 }
 
 *,
@@ -61,6 +77,53 @@ button {
 :focus-visible {
 	outline: 2px solid var(--color-primary);
 	outline-offset: 2px;
+}
+
+/* Scrollbar styling for dark theme */
+::-webkit-scrollbar {
+	width: 8px;
+}
+::-webkit-scrollbar-track {
+	background: var(--color-bg);
+}
+::-webkit-scrollbar-thumb {
+	background: var(--color-border);
+	border-radius: 4px;
+}
+
+/* Selection color */
+::selection {
+	background: var(--color-primary);
+	color: #fff;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+	}
+}
+
+/* Skip-to-content link (visually hidden until focused) */
+.skip-link {
+	position: absolute;
+	top: -100%;
+	left: 0;
+	z-index: 10000;
+	padding: 0.5rem 1rem;
+	background: var(--color-primary);
+	color: #fff;
+	font-size: 0.875rem;
+	font-weight: 600;
+	text-decoration: none;
+	border-radius: 0 0 4px 0;
+}
+.skip-link:focus {
+	top: 0;
 }
 
 /* Utility: screen reader only */

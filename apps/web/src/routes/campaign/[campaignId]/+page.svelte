@@ -14,11 +14,13 @@
 	let campaignId = $derived($page.params.campaignId ?? '');
 
 	let campaign = $state<Campaign | undefined>();
+	let campaignLoading = $state(true);
 	$effect(() => {
+		campaignLoading = true;
 		const observable = liveQuery(() => db.campaigns.get(campaignId));
 		const sub = observable.subscribe({
-			next: (result) => { campaign = result; },
-			error: (err) => console.error('[campaign]', err)
+			next: (result) => { campaign = result; campaignLoading = false; },
+			error: (err) => { console.error('[campaign]', err); campaignLoading = false; }
 		});
 		return () => sub.unsubscribe();
 	});
@@ -125,8 +127,9 @@
 		}
 	}
 
-	async function handleRemoveMember(id: string) {
+	async function handleRemoveMember(id: string, displayName: string) {
 		if (memberBusy) return;
+		if (!confirm(`Remove "${displayName}" from this campaign?`)) return;
 		memberBusy = true;
 		try {
 			await removeMember(id);
@@ -237,7 +240,7 @@
 			<div class="header-row">
 				<h1>{campaign.name}</h1>
 				<div class="header-actions">
-			<button class="action-btn" onclick={() => { showTemplatePicker = !showTemplatePicker; }} aria-label="New note">
+			<button class="action-btn" onclick={() => { showTemplatePicker = !showTemplatePicker; }} aria-label="New note" aria-expanded={showTemplatePicker}>
 					+ New Note
 				</button>
 				{#if notes.length > 0}
@@ -252,7 +255,7 @@
 					class:sync-success={syncStatus === 'success'}
 					onclick={handleSync}
 					disabled={syncStatus === 'syncing'}
-					aria-label="Sync campaign data"
+					aria-label={syncStatus === 'syncing' ? 'Syncing...' : syncStatus === 'error' ? 'Sync failed' : syncStatus === 'success' ? 'Sync successful' : 'Sync campaign data'}
 					title="Sync campaign data"
 				>
 					{syncStatus === 'syncing' ? '⟳' : syncStatus === 'error' ? '⚠' : syncStatus === 'success' ? '✓' : '↻'}
@@ -267,7 +270,7 @@
 			{/if}
 		</header>
 
-		<section class="session-section">
+		<section class="session-section" aria-live="polite">
 			<div class="session-section-row">
 				<h2>Session</h2>
 				{#if activeForThisCampaign}
@@ -369,7 +372,7 @@
 							</select>
 							<button
 								class="remove-btn"
-								onclick={() => handleRemoveMember(m.id)}
+								onclick={() => handleRemoveMember(m.id, m.display_name)}
 								disabled={memberBusy}
 								aria-label="Remove {m.display_name}"
 							>
@@ -441,36 +444,40 @@
 			{#if filteredNotes.length === 0}
 				<p class="empty-notes">{filterTag ? 'No notes with tag "' + filterTag + '".' : 'No notes yet. Create one to get started.'}</p>
 			{:else}
-				<ul>
-					{#each filteredNotes as n (n.id)}
-						<li>
-							<a href="/campaign/{campaignId}/notes/{n.id}" class="note-item">
-								<div class="note-info">
-									<span class="note-title">{n.title}</span>
-									{#if n.template_type && n.template_type !== 'blank'}
-										<span class="template-type">{n.template_type}</span>
-									{/if}
-									{#if n.tags.length > 0}
-										<div class="note-tags">
-											{#each n.tags as tag (tag)}
-												<button
-													class="tag-clickable"
-													onclick={(e) => { e.preventDefault(); e.stopPropagation(); setFilter(tag); }}
-													aria-label="Filter by tag {tag}"
-												>
-													{tag}
-												</button>
-											{/each}
-										</div>
-									{/if}
-								</div>
-								<span class="note-date">{new Date(n.updated_at).toLocaleDateString()}</span>
-							</a>
-						</li>
-					{/each}
-				</ul>
+					<ul>
+						{#each filteredNotes as n (n.id)}
+							<li class="note-list-item">
+								<a href="/campaign/{campaignId}/notes/{n.id}" class="note-item">
+									<div class="note-info">
+										<span class="note-title">{n.title}</span>
+										{#if n.template_type && n.template_type !== 'blank'}
+											<span class="template-type">{n.template_type}</span>
+										{/if}
+									</div>
+									<span class="note-date">{new Date(n.updated_at).toLocaleDateString()}</span>
+								</a>
+								{#if n.tags.length > 0}
+									<div class="note-tags">
+										{#each n.tags as tag (tag)}
+											<button
+												class="tag-clickable"
+												onclick={() => setFilter(tag)}
+												aria-label="Filter by tag {tag}"
+											>
+												{tag}
+											</button>
+										{/each}
+									</div>
+								{/if}
+							</li>
+						{/each}
+					</ul>
 			{/if}
 		</section>
+	{:else if campaignLoading}
+		<div class="loading">
+			<p>Loading campaign...</p>
+		</div>
 	{:else}
 		<div class="loading">
 			<p>Campaign not found.</p>
@@ -529,6 +536,11 @@
 		background: var(--color-primary-hover);
 	}
 
+	.action-btn:disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
+	}
+
 	.campaign-desc {
 		color: var(--color-text-muted);
 		font-size: 0.9375rem;
@@ -574,7 +586,7 @@
 	}
 
 	.action-btn.danger:hover:not(:disabled) {
-		filter: brightness(1.15);
+		background: #c73e54;
 	}
 
 	.session-list {
@@ -637,7 +649,7 @@
 
 	.recap-link {
 		font-size: 0.6875rem;
-		padding: 0.125rem 0.5rem;
+		padding: 0.25rem 0.625rem;
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
 		border-radius: 4px;
@@ -653,7 +665,7 @@
 
 	.recap-btn {
 		font-size: 0.6875rem;
-		padding: 0.125rem 0.5rem;
+		padding: 0.25rem 0.625rem;
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
 		border-radius: 4px;
@@ -730,16 +742,6 @@
 		cursor: pointer;
 	}
 
-	.cancel-btn {
-		background: none;
-		border: 1px solid var(--color-border);
-		color: var(--color-text-muted);
-		padding: 0.375rem 0.75rem;
-		border-radius: 4px;
-		font-size: 0.8125rem;
-		font-family: inherit;
-	}
-
 	.member-list {
 		list-style: none;
 		padding: 0;
@@ -768,7 +770,7 @@
 
 	.member-role-select {
 		font-size: 0.75rem;
-		padding: 0.125rem 0.375rem;
+		padding: 0.25rem 0.5rem;
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
 		border-radius: 4px;
@@ -779,13 +781,14 @@
 
 	.remove-btn {
 		background: none;
-		border: none;
+		border: 1px solid transparent;
 		color: var(--color-danger);
 		font-size: 1.125rem;
 		line-height: 1;
-		padding: 0 0.25rem;
+		padding: 0.375rem 0.5rem;
+		border-radius: 4px;
 		opacity: 0.5;
-		transition: opacity 0.15s;
+		transition: opacity 0.15s, border-color 0.15s;
 		font-family: inherit;
 	}
 
@@ -861,8 +864,15 @@
 		border: 1px solid var(--color-border);
 		color: var(--color-text-muted);
 		padding: 0.375rem 0.75rem;
-		border-radius: 4px;
+		border-radius: 6px;
 		font-size: 0.8125rem;
+		font-family: inherit;
+		cursor: pointer;
+		transition: background 0.15s;
+	}
+
+	.cancel-btn:hover {
+		background: var(--color-surface-alt);
 	}
 
 	.filter-bar {
@@ -966,15 +976,24 @@
 		margin: 0;
 	}
 
+	.note-list-item {
+		padding: 0.5rem 0.75rem;
+		border-radius: 6px;
+		transition: background 0.15s;
+	}
+
+	.note-list-item:hover {
+		background: var(--color-surface);
+	}
+
 	.note-item {
 		display: flex;
 		align-items: flex-start;
 		justify-content: space-between;
-		padding: 0.75rem;
+		padding: 0.25rem 0;
 		border-radius: 6px;
 		text-decoration: none;
 		color: var(--color-text);
-		transition: background 0.15s;
 		gap: 1rem;
 	}
 
@@ -1011,13 +1030,10 @@
 
 	.tag-clickable {
 		font-size: 0.6875rem;
-		padding: 0.125rem 0.5rem;
+		padding: 0.25rem 0.625rem;
 		background: var(--color-surface-alt);
 		border-radius: 9999px;
 		color: var(--color-text-muted);
-	}
-
-	.tag-clickable {
 		border: 1px solid transparent;
 		cursor: pointer;
 		font-family: inherit;
