@@ -1,5 +1,4 @@
 <script lang="ts">
-	import favicon from '$lib/assets/favicon.svg';
 	import AppShell from '$lib/components/layout/AppShell.svelte';
 	import '../app.css';
 
@@ -12,7 +11,8 @@
 </script>
 
 <svelte:head>
-	<link rel="icon" href={favicon} />
+	<link rel="manifest" href="/manifest.webmanifest" />
+	<link rel="icon" href="/icons/koalanotes-icon.png" type="image/png" />
 	<meta charset="utf-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
 	<meta name="application-name" content="KoalaNotes" />
