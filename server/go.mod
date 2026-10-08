@@ -1,6 +1,6 @@
 module github.com/shik3i/koalanotes
 
-go 1.25.12
+go 1.26.9
 
 require (
 	github.com/golang-jwt/jwt/v5 v5.3.1
